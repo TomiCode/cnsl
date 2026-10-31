@@ -80,7 +80,7 @@ applied on startup.
 | `CNSL_DATA_DIR` | `./data` | SQLite database and images |
 | `CNSL_CHROME_URL` | — | Remote headless Chrome; empty = launch a local one |
 | `CNSL_RENDER_BASE_URL` | `http://localhost:<port>` | URL Chrome uses to reach the dashboard listener |
-| `CNSL_TIMEZONE` | `TZ`, else `UTC` | Household timezone |
+| `CNSL_TIMEZONE` | `TZ`, else the system zone | Household timezone |
 | `CNSL_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
 | `CNSL_LOG_FORMAT` | `text` | `text` or `json` |
 

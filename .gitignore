@@ -37,3 +37,4 @@ web/node_modules/
 # Build output is embedded into the binary; keep the directory so go:embed works on a fresh clone.
 web/dist/*
 !web/dist/.gitkeep
+*.log

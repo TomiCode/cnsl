@@ -44,12 +44,15 @@ func Load() (Config, error) {
 		LogFormat:       env("CNSL_LOG_FORMAT", "text"),
 	}
 
-	tzName := env("CNSL_TIMEZONE", env("TZ", "UTC"))
-	tz, err := time.LoadLocation(tzName)
-	if err != nil {
-		return c, fmt.Errorf("CNSL_TIMEZONE %q: %w", tzName, err)
+	// Without CNSL_TIMEZONE or TZ use the system zone (UTC in containers unless TZ is set).
+	c.Timezone = time.Local
+	if tzName := env("CNSL_TIMEZONE", env("TZ", "")); tzName != "" {
+		tz, err := time.LoadLocation(tzName)
+		if err != nil {
+			return c, fmt.Errorf("CNSL_TIMEZONE %q: %w", tzName, err)
+		}
+		c.Timezone = tz
 	}
-	c.Timezone = tz
 
 	if err := c.LogLevel.UnmarshalText([]byte(env("CNSL_LOG_LEVEL", "info"))); err != nil {
 		return c, fmt.Errorf("CNSL_LOG_LEVEL: %w", err)
