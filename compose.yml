@@ -9,7 +9,6 @@ services:
     environment:
       # Address of the device listener as the devices see it (your host's LAN IP).
       CNSL_DEVICE_PUBLIC_URL: http://192.168.1.10:8081
-      CNSL_DASHBOARD_ORIGIN: http://192.168.1.10:8080
       CNSL_CHROME_URL: http://chrome:9222
       CNSL_RENDER_BASE_URL: http://cnsl:8080
       TZ: Etc/UTC # your household timezone, e.g. Europe/Vienna

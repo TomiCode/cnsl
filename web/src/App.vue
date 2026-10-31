@@ -19,22 +19,24 @@ const nav = [
 
 <template>
   <div class="flex h-full">
-    <aside class="flex w-56 shrink-0 flex-col border-r border-zinc-200 bg-white">
-      <div class="px-5 py-4 font-mono text-lg font-semibold tracking-tight">cnsl</div>
+    <!-- Icon-only sidebar on narrow screens, full labels from md up. -->
+    <aside class="flex w-14 shrink-0 flex-col border-r border-zinc-200 bg-white md:w-56">
+      <div class="px-3 py-4 font-mono text-sm font-semibold tracking-tight md:px-5 md:text-lg">cnsl</div>
       <nav class="flex flex-col gap-0.5 px-2">
         <RouterLink
           v-for="item in nav"
           :key="item.to"
           :to="item.to"
+          :title="item.label"
           class="flex items-center gap-2.5 rounded-md px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
-          active-class="bg-zinc-100 font-medium text-zinc-900"
-          :exact-active-class="item.to === '/' ? 'bg-zinc-100 font-medium text-zinc-900' : undefined"
+          :active-class="item.to === '/' ? '' : 'bg-zinc-100 font-medium text-zinc-900'"
+          exact-active-class="bg-zinc-100 font-medium text-zinc-900"
         >
-          <component :is="item.icon" class="size-4" />
-          {{ item.label }}
+          <component :is="item.icon" class="size-4 shrink-0" />
+          <span class="hidden md:inline">{{ item.label }}</span>
         </RouterLink>
       </nav>
-      <div class="mt-auto px-5 py-4 text-xs text-zinc-400">
+      <div class="mt-auto hidden px-5 py-4 text-xs text-zinc-400 md:block">
         <span v-if="system.health">{{ system.health.version }}</span>
         <span v-else-if="!system.reachable" class="text-red-500">server unreachable</span>
       </div>

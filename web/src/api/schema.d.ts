@@ -21,6 +21,191 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/system": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Server information the dashboard needs */
+        get: operations["getSystem"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Live change notifications
+         * @description Server-Sent Events stream. Each message's `event` field is the event type and its `data`
+         *     is an Event JSON object. Clients refetch the affected resources when notified.
+         */
+        get: operations["streamEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/device-models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listDeviceModels"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/devices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** All devices, pending first */
+        get: operations["listDevices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/devices/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["DeviceID"];
+            };
+            cookie?: never;
+        };
+        get: operations["getDevice"];
+        put?: never;
+        post?: never;
+        /** Remove a device (it reappears as pending when it next contacts the server) */
+        delete: operations["deleteDevice"];
+        options?: never;
+        head?: never;
+        /** Change device settings */
+        patch: operations["updateDevice"];
+        trace?: never;
+    };
+    "/devices/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["DeviceID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Activate a pending or disabled device */
+        post: operations["approveDevice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/devices/{id}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["DeviceID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["disableDevice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/devices/{id}/image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["DeviceID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Upload a static image for the device (until screens exist) */
+        put: operations["setDeviceImage"];
+        post?: never;
+        delete: operations["clearDeviceImage"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/devices/{id}/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["DeviceID"];
+            };
+            cookie?: never;
+        };
+        /** Device logs, newest first */
+        get: operations["listDeviceLogs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/devices/{id}/telemetry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["DeviceID"];
+            };
+            cookie?: never;
+        };
+        /** Telemetry history, newest first */
+        get: operations["listDeviceTelemetry"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -32,6 +217,130 @@ export interface components {
             version: string;
             /** @enum {string} */
             database: "ok" | "error";
+        };
+        SystemInfo: {
+            version: string;
+            /** @example Europe/Vienna */
+            timezone: string;
+            /** @description Base URL devices use to reach the device listener; empty if not configured. */
+            device_public_url: string;
+        };
+        Event: {
+            /** @enum {string} */
+            type: "device.created" | "device.updated" | "device.deleted" | "device.seen" | "device.logs";
+            /** Format: int64 */
+            device_id?: number;
+        };
+        DeviceModel: {
+            /** Format: int64 */
+            id: number;
+            key: string;
+            name: string;
+            firmware_model?: string | null;
+            width: number;
+            height: number;
+            /** @enum {integer} */
+            bit_depth: 1 | 2 | 4;
+        };
+        /** @enum {string} */
+        DeviceStatus: "pending" | "active" | "disabled";
+        Device: {
+            /** Format: int64 */
+            id: number;
+            /** @example AA:BB:CC:DD:EE:FF */
+            mac: string;
+            api_key: string;
+            /** @example K7Q2XM */
+            friendly_id: string;
+            label: string;
+            status: components["schemas"]["DeviceStatus"];
+            /** Format: int64 */
+            model_id?: number | null;
+            /** @description Seconds between wakes. */
+            refresh_rate: number;
+            /** @example 22:00 */
+            sleep_start?: string | null;
+            /** @example 06:00 */
+            sleep_end?: string | null;
+            /** @description Static image assigned to the device; null = placeholder. */
+            image_filename?: string | null;
+            firmware_version?: string | null;
+            reported_model?: string | null;
+            reported_width?: number | null;
+            reported_height?: number | null;
+            /** Format: date-time */
+            last_seen_at?: string | null;
+            /** Format: date-time */
+            approved_at?: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            latest?: components["schemas"]["Telemetry"];
+        };
+        DeviceUpdate: {
+            label?: string;
+            /** Format: int64 */
+            model_id?: number;
+            refresh_rate?: number;
+            /** @description HH:MM, empty string clears the sleep window. */
+            sleep_start?: string;
+            /** @description HH:MM, empty string clears the sleep window. */
+            sleep_end?: string;
+        };
+        /**
+         * @default contain
+         * @enum {string}
+         */
+        ImageFit: "contain" | "cover";
+        /**
+         * @default floyd-steinberg
+         * @enum {string}
+         */
+        ImageDither: "none" | "floyd-steinberg";
+        Telemetry: {
+            /** Format: int64 */
+            id: number;
+            /** Format: date-time */
+            at: string;
+            battery_voltage?: number | null;
+            battery_percent?: number | null;
+            charging?: boolean | null;
+            usb_connected?: boolean | null;
+            rssi?: number | null;
+            wake_reason?: string | null;
+            wake_time?: number | null;
+            firmware_version?: string | null;
+            image_cached?: boolean | null;
+            served_filename?: string | null;
+            raw_headers?: {
+                [key: string]: string;
+            } | null;
+        };
+        DeviceLog: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            device_log_id?: number | null;
+            level?: string | null;
+            message: string;
+            source_path?: string | null;
+            source_line?: number | null;
+            /** Format: date-time */
+            device_time?: string | null;
+            /** Format: date-time */
+            received_at: string;
+            extra?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        DeviceLogPage: {
+            items: components["schemas"]["DeviceLog"][];
+            /**
+             * Format: int64
+             * @description Pass as before_id to load older entries; null when there are none.
+             */
+            next_before_id?: number | null;
         };
         /** @description RFC 9457 problem details. */
         Problem: {
@@ -47,8 +356,30 @@ export interface components {
             message: string;
         };
     };
-    responses: never;
-    parameters: never;
+    responses: {
+        /** @description The device */
+        Device: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Device"];
+            };
+        };
+        /** @description Error */
+        Problem: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+    };
+    parameters: {
+        DeviceID: number;
+        Limit: number;
+    };
     requestBodies: never;
     headers: never;
     pathItems: never;
@@ -82,6 +413,274 @@ export interface operations {
                     "application/json": components["schemas"]["Health"];
                 };
             };
+        };
+    };
+    getSystem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description System information */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemInfo"];
+                };
+            };
+        };
+    };
+    streamEvents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Event stream */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": components["schemas"]["Event"];
+                };
+            };
+        };
+    };
+    listDeviceModels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description All device models */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeviceModel"][];
+                };
+            };
+        };
+    };
+    listDevices: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Devices */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Device"][];
+                };
+            };
+        };
+    };
+    getDevice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["DeviceID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["Device"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    deleteDevice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["DeviceID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateDevice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["DeviceID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeviceUpdate"];
+            };
+        };
+        responses: {
+            200: components["responses"]["Device"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    approveDevice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["DeviceID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["Device"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    disableDevice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["DeviceID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["Device"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    setDeviceImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["DeviceID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /**
+                     * Format: binary
+                     * @description PNG, JPEG or GIF
+                     */
+                    file: string;
+                    fit?: components["schemas"]["ImageFit"];
+                    dither?: components["schemas"]["ImageDither"];
+                };
+            };
+        };
+        responses: {
+            200: components["responses"]["Device"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    clearDeviceImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["DeviceID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["Device"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listDeviceLogs: {
+        parameters: {
+            query?: {
+                /** @description Page backwards from this log id (exclusive). */
+                before_id?: number;
+                /** @description Only logs newer than this id (live tail). */
+                after_id?: number;
+                level?: string[];
+                /** @description Substring search in the message. */
+                q?: string;
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["DeviceID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Logs */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeviceLogPage"];
+                };
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    listDeviceTelemetry: {
+        parameters: {
+            query?: {
+                before_id?: number;
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["DeviceID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Telemetry */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Telemetry"][];
+                };
+            };
+            404: components["responses"]["Problem"];
         };
     };
 }

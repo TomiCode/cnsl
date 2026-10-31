@@ -15,7 +15,6 @@ type Config struct {
 	Addr            string // dashboard listener
 	DeviceAddr      string // device (firmware) listener
 	DevicePublicURL string // base URL of the device listener as devices see it
-	DashboardOrigin string // origin allowed by CORS on the device listener
 	DataDir         string
 	ChromeURL       string // empty = launch a local Chrome
 	RenderBaseURL   string // URL Chrome uses to reach the dashboard listener
@@ -39,7 +38,6 @@ func Load() (Config, error) {
 		Addr:            env("CNSL_ADDR", ":8080"),
 		DeviceAddr:      env("CNSL_DEVICE_ADDR", ":8081"),
 		DevicePublicURL: strings.TrimRight(env("CNSL_DEVICE_PUBLIC_URL", ""), "/"),
-		DashboardOrigin: env("CNSL_DASHBOARD_ORIGIN", ""),
 		DataDir:         env("CNSL_DATA_DIR", "./data"),
 		ChromeURL:       env("CNSL_CHROME_URL", ""),
 		RenderBaseURL:   strings.TrimRight(env("CNSL_RENDER_BASE_URL", ""), "/"),

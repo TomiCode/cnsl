@@ -1,12 +1,19 @@
 openapi: 3.0.3
 info:
   title: cnsl dashboard API
-  version: 0.1.0
+  version: 0.2.0
   description: |
     API used by the cnsl web dashboard. Device (firmware) endpoints are not part of this spec;
-    they are served on the separate device listener.
+    they are served on the separate device listener (and mirrored under /device on the
+    dashboard listener for the virtual device).
 servers:
   - url: /api/v1
+
+tags:
+  - name: system
+  - name: devices
+  - name: stream
+    description: Server-Sent Events. Implemented by hand (not generated) because it streams.
 
 paths:
   /health:
@@ -28,7 +35,256 @@ paths:
               schema:
                 $ref: "#/components/schemas/Health"
 
+  /system:
+    get:
+      operationId: getSystem
+      summary: Server information the dashboard needs
+      tags: [system]
+      responses:
+        "200":
+          description: System information
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemInfo"
+
+  /events:
+    get:
+      operationId: streamEvents
+      summary: Live change notifications
+      description: |
+        Server-Sent Events stream. Each message's `event` field is the event type and its `data`
+        is an Event JSON object. Clients refetch the affected resources when notified.
+      tags: [stream]
+      responses:
+        "200":
+          description: Event stream
+          content:
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/Event"
+
+  /device-models:
+    get:
+      operationId: listDeviceModels
+      tags: [devices]
+      responses:
+        "200":
+          description: All device models
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DeviceModel"
+
+  /devices:
+    get:
+      operationId: listDevices
+      summary: All devices, pending first
+      tags: [devices]
+      responses:
+        "200":
+          description: Devices
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Device"
+
+  /devices/{id}:
+    parameters:
+      - $ref: "#/components/parameters/DeviceID"
+    get:
+      operationId: getDevice
+      tags: [devices]
+      responses:
+        "200":
+          $ref: "#/components/responses/Device"
+        "404":
+          $ref: "#/components/responses/Problem"
+    patch:
+      operationId: updateDevice
+      summary: Change device settings
+      tags: [devices]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeviceUpdate"
+      responses:
+        "200":
+          $ref: "#/components/responses/Device"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: deleteDevice
+      summary: Remove a device (it reappears as pending when it next contacts the server)
+      tags: [devices]
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          $ref: "#/components/responses/Problem"
+
+  /devices/{id}/approve:
+    parameters:
+      - $ref: "#/components/parameters/DeviceID"
+    post:
+      operationId: approveDevice
+      summary: Activate a pending or disabled device
+      tags: [devices]
+      responses:
+        "200":
+          $ref: "#/components/responses/Device"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+
+  /devices/{id}/disable:
+    parameters:
+      - $ref: "#/components/parameters/DeviceID"
+    post:
+      operationId: disableDevice
+      tags: [devices]
+      responses:
+        "200":
+          $ref: "#/components/responses/Device"
+        "404":
+          $ref: "#/components/responses/Problem"
+
+  /devices/{id}/image:
+    parameters:
+      - $ref: "#/components/parameters/DeviceID"
+    put:
+      operationId: setDeviceImage
+      summary: Upload a static image for the device (until screens exist)
+      tags: [devices]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: PNG, JPEG or GIF
+                fit:
+                  $ref: "#/components/schemas/ImageFit"
+                dither:
+                  $ref: "#/components/schemas/ImageDither"
+      responses:
+        "200":
+          $ref: "#/components/responses/Device"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: clearDeviceImage
+      tags: [devices]
+      responses:
+        "200":
+          $ref: "#/components/responses/Device"
+        "404":
+          $ref: "#/components/responses/Problem"
+
+  /devices/{id}/logs:
+    parameters:
+      - $ref: "#/components/parameters/DeviceID"
+    get:
+      operationId: listDeviceLogs
+      summary: Device logs, newest first
+      tags: [devices]
+      parameters:
+        - name: before_id
+          in: query
+          description: Page backwards from this log id (exclusive).
+          schema: { type: integer, format: int64 }
+        - name: after_id
+          in: query
+          description: Only logs newer than this id (live tail).
+          schema: { type: integer, format: int64 }
+        - name: level
+          in: query
+          style: form
+          explode: false
+          schema:
+            type: array
+            items: { type: string }
+        - name: q
+          in: query
+          description: Substring search in the message.
+          schema: { type: string }
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Logs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceLogPage"
+        "404":
+          $ref: "#/components/responses/Problem"
+
+  /devices/{id}/telemetry:
+    parameters:
+      - $ref: "#/components/parameters/DeviceID"
+    get:
+      operationId: listDeviceTelemetry
+      summary: Telemetry history, newest first
+      tags: [devices]
+      parameters:
+        - name: before_id
+          in: query
+          schema: { type: integer, format: int64 }
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Telemetry
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Telemetry"
+        "404":
+          $ref: "#/components/responses/Problem"
+
 components:
+  parameters:
+    DeviceID:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer, format: int64 }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 500, default: 100 }
+
+  responses:
+    Device:
+      description: The device
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Device"
+    Problem:
+      description: Error
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+
   schemas:
     Health:
       type: object
@@ -43,6 +299,150 @@ components:
         database:
           type: string
           enum: [ok, error]
+
+    SystemInfo:
+      type: object
+      required: [version, timezone, device_public_url]
+      properties:
+        version: { type: string }
+        timezone: { type: string, example: Europe/Vienna }
+        device_public_url:
+          type: string
+          description: Base URL devices use to reach the device listener; empty if not configured.
+
+    Event:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [device.created, device.updated, device.deleted, device.seen, device.logs]
+        device_id:
+          type: integer
+          format: int64
+
+    DeviceModel:
+      type: object
+      required: [id, key, name, width, height, bit_depth]
+      properties:
+        id: { type: integer, format: int64 }
+        key: { type: string }
+        name: { type: string }
+        firmware_model: { type: string, nullable: true }
+        width: { type: integer }
+        height: { type: integer }
+        bit_depth: { type: integer, enum: [1, 2, 4] }
+
+    DeviceStatus:
+      type: string
+      enum: [pending, active, disabled]
+
+    Device:
+      type: object
+      required: [id, mac, api_key, friendly_id, label, status, refresh_rate, created_at, updated_at]
+      properties:
+        id: { type: integer, format: int64 }
+        mac: { type: string, example: "AA:BB:CC:DD:EE:FF" }
+        api_key: { type: string }
+        friendly_id: { type: string, example: K7Q2XM }
+        label: { type: string }
+        status:
+          $ref: "#/components/schemas/DeviceStatus"
+        model_id: { type: integer, format: int64, nullable: true }
+        refresh_rate:
+          type: integer
+          description: Seconds between wakes.
+        sleep_start: { type: string, nullable: true, example: "22:00" }
+        sleep_end: { type: string, nullable: true, example: "06:00" }
+        image_filename:
+          type: string
+          nullable: true
+          description: Static image assigned to the device; null = placeholder.
+        firmware_version: { type: string, nullable: true }
+        reported_model: { type: string, nullable: true }
+        reported_width: { type: integer, nullable: true }
+        reported_height: { type: integer, nullable: true }
+        last_seen_at: { type: string, format: date-time, nullable: true }
+        approved_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        latest:
+          $ref: "#/components/schemas/Telemetry"
+
+    DeviceUpdate:
+      type: object
+      properties:
+        label: { type: string, maxLength: 100 }
+        model_id: { type: integer, format: int64 }
+        refresh_rate: { type: integer, minimum: 30, maximum: 86400 }
+        sleep_start:
+          type: string
+          description: HH:MM, empty string clears the sleep window.
+        sleep_end:
+          type: string
+          description: HH:MM, empty string clears the sleep window.
+
+    ImageFit:
+      type: string
+      enum: [contain, cover]
+      default: contain
+
+    ImageDither:
+      type: string
+      enum: [none, floyd-steinberg]
+      default: floyd-steinberg
+
+    Telemetry:
+      type: object
+      required: [id, at]
+      properties:
+        id: { type: integer, format: int64 }
+        at: { type: string, format: date-time }
+        battery_voltage: { type: number, nullable: true }
+        battery_percent: { type: number, nullable: true }
+        charging: { type: boolean, nullable: true }
+        usb_connected: { type: boolean, nullable: true }
+        rssi: { type: integer, nullable: true }
+        wake_reason: { type: string, nullable: true }
+        wake_time: { type: integer, nullable: true }
+        firmware_version: { type: string, nullable: true }
+        image_cached: { type: boolean, nullable: true }
+        served_filename: { type: string, nullable: true }
+        raw_headers:
+          type: object
+          nullable: true
+          additionalProperties: { type: string }
+
+    DeviceLog:
+      type: object
+      required: [id, message, received_at]
+      properties:
+        id: { type: integer, format: int64 }
+        device_log_id: { type: integer, format: int64, nullable: true }
+        level: { type: string, nullable: true }
+        message: { type: string }
+        source_path: { type: string, nullable: true }
+        source_line: { type: integer, nullable: true }
+        device_time: { type: string, format: date-time, nullable: true }
+        received_at: { type: string, format: date-time }
+        extra:
+          type: object
+          nullable: true
+          additionalProperties: true
+
+    DeviceLogPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/DeviceLog"
+        next_before_id:
+          type: integer
+          format: int64
+          nullable: true
+          description: Pass as before_id to load older entries; null when there are none.
 
     Problem:
       description: RFC 9457 problem details.

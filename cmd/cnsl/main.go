@@ -16,8 +16,11 @@ import (
 
 	"github.com/TomiCode/cnsl/internal/config"
 	"github.com/TomiCode/cnsl/internal/dashboard"
+	"github.com/TomiCode/cnsl/internal/device"
+	"github.com/TomiCode/cnsl/internal/events"
 	"github.com/TomiCode/cnsl/internal/firmware"
 	"github.com/TomiCode/cnsl/internal/httpx"
+	"github.com/TomiCode/cnsl/internal/imaging"
 	"github.com/TomiCode/cnsl/internal/store"
 	"github.com/TomiCode/cnsl/web"
 )
@@ -56,18 +59,34 @@ func run() error {
 		logger.Warn("CNSL_DEVICE_PUBLIC_URL is not set; devices will not be able to download images")
 	}
 
-	api, err := dashboard.NewServer(version, st).Handler()
+	broker := events.NewBroker()
+	devices := device.NewService(st, broker, imaging.Files{Dir: cfg.ImagesDir()}, cfg.Timezone, logger)
+
+	api, err := dashboard.NewServer(dashboard.Options{
+		Version:         version,
+		Store:           st,
+		Devices:         devices,
+		Events:          broker,
+		Timezone:        cfg.Timezone,
+		DevicePublicURL: cfg.DevicePublicURL,
+	}).Handler()
 	if err != nil {
 		return err
 	}
-	dashMux := http.NewServeMux()
-	dashMux.Handle(dashboard.BasePath+"/", api)
-	dashMux.Handle("/", web.Handler())
 
 	deviceHandler := firmware.Handler(firmware.Options{
-		ImagesDir:   cfg.ImagesDir(),
-		AllowOrigin: cfg.DashboardOrigin,
+		Devices:   devices,
+		ImagesDir: cfg.ImagesDir(),
+		PublicURL: cfg.DevicePublicURL,
+		Log:       logger,
 	})
+
+	dashMux := http.NewServeMux()
+	dashMux.Handle(dashboard.BasePath+"/", api)
+	// The device API is mirrored on the dashboard listener so the browser-based virtual device
+	// (and image previews) work same-origin, without CORS.
+	dashMux.Handle("/device/", http.StripPrefix("/device", deviceHandler))
+	dashMux.Handle("/", web.Handler())
 
 	servers := []*http.Server{
 		newServer(ctx, cfg.Addr, httpx.LogRequests(logger.With("listener", "dashboard"), dashMux)),
