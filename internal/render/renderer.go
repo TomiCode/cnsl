@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/TomiCode/cnsl/internal/connector"
 	"github.com/TomiCode/cnsl/internal/imaging"
 	"github.com/TomiCode/cnsl/internal/store"
 	"github.com/TomiCode/cnsl/internal/tmpl"
@@ -30,6 +31,13 @@ type Renderer struct {
 
 	uploadsDir string // original asset uploads
 	cacheDir   string // processed asset variants
+
+	data DataSource
+}
+
+// DataSource provides connector data for a screen's region (see connector.Service).
+type DataSource interface {
+	Resolve(ctx context.Context, screenID int64, regionKey string, sample bool) (map[string]connector.Result, error)
 }
 
 type Options struct {
@@ -42,11 +50,12 @@ type Options struct {
 
 	UploadsDir string
 	CacheDir   string
+	Data       DataSource
 }
 
 func NewRenderer(o Options) *Renderer {
 	return &Renderer{store: o.Store, files: o.Files, browser: o.Browser, pages: newPages(),
-		baseURL: o.BaseURL, tz: o.Timezone, log: o.Log, uploadsDir: o.UploadsDir, cacheDir: o.CacheDir}
+		baseURL: o.BaseURL, tz: o.Timezone, log: o.Log, uploadsDir: o.UploadsDir, cacheDir: o.CacheDir, data: o.Data}
 }
 
 // Request describes one render. Overrides replace region templates by key without saving
@@ -56,6 +65,7 @@ type Request struct {
 	Overrides map[string]string
 	Head      *string
 	Trigger   string
+	Sample    bool // use connector sample data instead of real data
 }
 
 type Result struct {
@@ -64,7 +74,10 @@ type Result struct {
 	Levels   *image.Gray
 	BitDepth int
 	Errors   []*tmpl.Error
-	Duration time.Duration
+	// DataErrors are connector problems by binding alias (the render still happens, with
+	// stale or missing data).
+	DataErrors map[string]string
+	Duration   time.Duration
 }
 
 // Render runs the pipeline without storing anything.
@@ -123,7 +136,27 @@ func (r *Renderer) Render(ctx context.Context, req Request) (Result, error) {
 		bgURL = "/internal/render/page/" + r.pages.putBytes(buf.Bytes(), "image/png")
 	}
 
-	html, errs := compose(page{screen: sc, model: model, background: bgURL}, regions, tmpl.Context{
+	dataErrors := map[string]string{}
+	dataFor := func(regionKey string) (map[string]any, map[string]bool) {
+		data, stale := map[string]any{}, map[string]bool{}
+		if r.data == nil {
+			return data, stale
+		}
+		results, err := r.data.Resolve(ctx, sc.ID, regionKey, req.Sample)
+		if err != nil {
+			dataErrors["*"] = err.Error()
+			return data, stale
+		}
+		for alias, res := range results {
+			data[alias], stale[alias] = res.Data, res.Stale
+			if res.Error != "" {
+				dataErrors[alias] = res.Error
+			}
+		}
+		return data, stale
+	}
+
+	html, errs := compose(page{screen: sc, model: model, background: bgURL, data: dataFor}, regions, tmpl.Context{
 		Now:    time.Now().In(r.tz),
 		Screen: tmpl.ScreenInfo{Name: sc.Name, Width: model.Width, Height: model.Height, BitDepth: model.BitDepth},
 		Data:   map[string]any{},
@@ -134,6 +167,7 @@ func (r *Renderer) Render(ctx context.Context, req Request) (Result, error) {
 		return Result{}, err
 	}
 	res.Errors = errs
+	res.DataErrors = dataErrors
 	res.Duration = time.Since(start)
 	return res, nil
 }

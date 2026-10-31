@@ -55,6 +55,12 @@ const snippets: { label: string; detail: string; body: string }[] = [
 
 let registered = false
 
+// .Data paths from the screen's current binding data (see lib/datapaths.ts), updated by the editor.
+let dataFields: { label: string; detail: string }[] = []
+export function setDataFields(fields: { label: string; detail: string }[]) {
+  dataFields = fields
+}
+
 export function setupMonaco(functions: string[]) {
   if (registered) return monaco
   registered = true
@@ -171,6 +177,7 @@ export function setupMonaco(functions: string[]) {
       if (inAction) {
         return {
           suggestions: [
+            ...dataFields.map((f) => ({ label: f.label, kind: K.Variable, detail: f.detail, insertText: f.label, range, sortText: '0' + f.label })),
             ...contextFields.map((f) => ({ label: f.label, kind: K.Field, detail: f.detail, insertText: f.label, range })),
             ...functions.map((f) => ({ label: f, kind: K.Function, detail: 'cnsl helper', insertText: f, range })),
             ...keywords.map((k) => ({ label: k, kind: K.Keyword, insertText: k, range })),

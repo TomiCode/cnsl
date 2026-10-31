@@ -284,7 +284,20 @@ func (s *Server) mergeRegions(ctx context.Context, sc store.Screen, model store.
 			merged[idx].Transparent = *r.Transparent
 		}
 	}
-	return render.ApplyLayout(layout, model, merged), nil
+	out := render.ApplyLayout(layout, model, merged)
+	// Regions that only exist in the new layout get their submitted content by key (the
+	// editor lets you fill them in before the layout change is saved).
+	for _, r := range in {
+		for i := range out {
+			if out[i].Key == r.Key {
+				out[i].Template = r.Template
+				if r.Transparent != nil {
+					out[i].Transparent = *r.Transparent
+				}
+			}
+		}
+	}
+	return out, nil
 }
 
 func toBackground(b render.Background) gen.Background {
@@ -329,6 +342,7 @@ func (s *Server) DeleteScreen(ctx context.Context, req gen.DeleteScreenRequestOb
 func (s *Server) PreviewScreen(ctx context.Context, req gen.PreviewScreenRequestObject) (gen.PreviewScreenResponseObject, error) {
 	rreq := render.Request{ScreenID: req.Id, Trigger: "preview"}
 	if req.Body != nil {
+		rreq.Sample = req.Body.Sample != nil && *req.Body.Sample
 		if req.Body.Templates != nil {
 			rreq.Overrides = *req.Body.Templates
 		}
@@ -393,6 +407,10 @@ func toPreview(res render.Result) gen.Preview {
 	}
 	for _, e := range res.Errors {
 		p.Errors = append(p.Errors, gen.TemplateError{Region: e.Region, Line: e.Line, Column: e.Column, Message: e.Message})
+	}
+	if len(res.DataErrors) > 0 {
+		de := res.DataErrors
+		p.DataErrors = &de
 	}
 	return p
 }

@@ -65,6 +65,45 @@ func (e BackgroundOrder) Valid() bool {
 	}
 }
 
+// Defines values for ConnectorFieldKind.
+const (
+	Bool   ConnectorFieldKind = "bool"
+	Int    ConnectorFieldKind = "int"
+	List   ConnectorFieldKind = "list"
+	Number ConnectorFieldKind = "number"
+	Secret ConnectorFieldKind = "secret"
+	Select ConnectorFieldKind = "select"
+	String ConnectorFieldKind = "string"
+	Text   ConnectorFieldKind = "text"
+	Url    ConnectorFieldKind = "url"
+)
+
+// Valid indicates whether the value is a known member of the ConnectorFieldKind enum.
+func (e ConnectorFieldKind) Valid() bool {
+	switch e {
+	case Bool:
+		return true
+	case Int:
+		return true
+	case List:
+		return true
+	case Number:
+		return true
+	case Secret:
+		return true
+	case Select:
+		return true
+	case String:
+		return true
+	case Text:
+		return true
+	case Url:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DeviceModelBitDepth.
 const (
 	N1 DeviceModelBitDepth = 1
@@ -288,6 +327,87 @@ type BackgroundKind string
 // BackgroundOrder defines model for Background.Order.
 type BackgroundOrder string
 
+// Binding defines model for Binding.
+type Binding struct {
+	// Alias Templates read the data as .Data.<alias>.
+	Alias       string                 `json:"alias"`
+	ConnectorId int64                  `json:"connector_id"`
+	Enabled     bool                   `json:"enabled"`
+	Id          *int64                 `json:"id,omitempty"`
+	Params      map[string]interface{} `json:"params"`
+
+	// RegionKey Only this region sees the data; null = every region.
+	RegionKey *string `json:"region_key,omitempty"`
+
+	// Ttl Seconds before the data is fetched again.
+	Ttl int `json:"ttl"`
+}
+
+// BindingData defines model for BindingData.
+type BindingData struct {
+	Data      interface{} `json:"data,omitempty"`
+	Error     *string     `json:"error,omitempty"`
+	FetchedAt *time.Time  `json:"fetched_at,omitempty"`
+	Stale     bool        `json:"stale"`
+}
+
+// Connector defines model for Connector.
+type Connector struct {
+	BindingCount int `json:"binding_count"`
+
+	// Config Settings without secret fields.
+	Config map[string]interface{} `json:"config"`
+	Id     int64                  `json:"id"`
+	Name   string                 `json:"name"`
+
+	// SecretsSet Secret fields that have a stored value.
+	SecretsSet []string  `json:"secrets_set"`
+	Type       string    `json:"type"`
+	UpdatedAt  time.Time `json:"updated_at"`
+}
+
+// ConnectorField defines model for ConnectorField.
+type ConnectorField struct {
+	Default  interface{}        `json:"default,omitempty"`
+	Help     *string            `json:"help,omitempty"`
+	Key      string             `json:"key"`
+	Kind     ConnectorFieldKind `json:"kind"`
+	Label    string             `json:"label"`
+	Options  *[]string          `json:"options,omitempty"`
+	Required *bool              `json:"required,omitempty"`
+}
+
+// ConnectorFieldKind defines model for ConnectorField.Kind.
+type ConnectorFieldKind string
+
+// ConnectorInput defines model for ConnectorInput.
+type ConnectorInput struct {
+	Config map[string]interface{} `json:"config"`
+	Name   string                 `json:"name"`
+
+	// Type Required when creating; ignored on update.
+	Type *string `json:"type,omitempty"`
+}
+
+// ConnectorTestResult defines model for ConnectorTestResult.
+type ConnectorTestResult struct {
+	Data       interface{} `json:"data,omitempty"`
+	DurationMs int64       `json:"duration_ms"`
+	Error      *string     `json:"error,omitempty"`
+	Ok         bool        `json:"ok"`
+}
+
+// ConnectorType defines model for ConnectorType.
+type ConnectorType struct {
+	ConfigSchema []ConnectorField `json:"config_schema"`
+	Description  string           `json:"description"`
+
+	// Key Example: homeassistant
+	Key          string           `json:"key"`
+	Name         string           `json:"name"`
+	ParamsSchema []ConnectorField `json:"params_schema"`
+}
+
 // Device defines model for Device.
 type Device struct {
 	ApiKey     string     `json:"api_key"`
@@ -464,6 +584,9 @@ type PlaylistItem struct {
 
 // Preview defines model for Preview.
 type Preview struct {
+	// DataErrors Connector problems by binding alias.
+	DataErrors *map[string]string `json:"data_errors,omitempty"`
+
 	// Device data:image/png;base64 URL of the image as the device gets it.
 	Device     string          `json:"device"`
 	DurationMs int64           `json:"duration_ms"`
@@ -476,6 +599,9 @@ type Preview struct {
 // PreviewRequest defines model for PreviewRequest.
 type PreviewRequest struct {
 	Head *string `json:"head,omitempty"`
+
+	// Sample Use connector sample data instead of real data.
+	Sample *bool `json:"sample,omitempty"`
 
 	// Templates Unsaved region templates by region key.
 	Templates *map[string]string `json:"templates,omitempty"`
@@ -668,6 +794,9 @@ type ToneCurve struct {
 // AssetID defines model for AssetID.
 type AssetID = int64
 
+// ConnectorID defines model for ConnectorID.
+type ConnectorID = int64
+
 // DeviceID defines model for DeviceID.
 type DeviceID = int64
 
@@ -698,6 +827,11 @@ type PreviewAssetJSONBody struct {
 	ModelId int64        `json:"model_id"`
 }
 
+// TestConnectorJSONBody defines parameters for TestConnector.
+type TestConnectorJSONBody struct {
+	Params *map[string]interface{} `json:"params,omitempty"`
+}
+
 // ListDeviceLogsParams defines parameters for ListDeviceLogs.
 type ListDeviceLogsParams struct {
 	// BeforeId Page backwards from this log id (exclusive).
@@ -723,11 +857,28 @@ type ListDeviceTelemetryParams struct {
 	Limit    *Limit `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// ReplaceBindingsJSONBody defines parameters for ReplaceBindings.
+type ReplaceBindingsJSONBody = []Binding
+
+// GetScreenDataParams defines parameters for GetScreenData.
+type GetScreenDataParams struct {
+	Sample *bool `form:"sample,omitempty" json:"sample,omitempty"`
+}
+
 // UploadAssetMultipartRequestBody defines body for UploadAsset for multipart/form-data ContentType.
 type UploadAssetMultipartRequestBody UploadAssetMultipartBody
 
 // PreviewAssetJSONRequestBody defines body for PreviewAsset for application/json ContentType.
 type PreviewAssetJSONRequestBody PreviewAssetJSONBody
+
+// CreateConnectorJSONRequestBody defines body for CreateConnector for application/json ContentType.
+type CreateConnectorJSONRequestBody = ConnectorInput
+
+// UpdateConnectorJSONRequestBody defines body for UpdateConnector for application/json ContentType.
+type UpdateConnectorJSONRequestBody = ConnectorInput
+
+// TestConnectorJSONRequestBody defines body for TestConnector for application/json ContentType.
+type TestConnectorJSONRequestBody TestConnectorJSONBody
 
 // SetToneCurveJSONRequestBody defines body for SetToneCurve for application/json ContentType.
 type SetToneCurveJSONRequestBody = ToneCurve
@@ -753,6 +904,9 @@ type CreateScreenJSONRequestBody = ScreenCreate
 // UpdateScreenJSONRequestBody defines body for UpdateScreen for application/json ContentType.
 type UpdateScreenJSONRequestBody = ScreenUpdate
 
+// ReplaceBindingsJSONRequestBody defines body for ReplaceBindings for application/json ContentType.
+type ReplaceBindingsJSONRequestBody = ReplaceBindingsJSONBody
+
 // PreviewScreenJSONRequestBody defines body for PreviewScreen for application/json ContentType.
 type PreviewScreenJSONRequestBody = PreviewRequest
 
@@ -770,6 +924,24 @@ type ServerInterface interface {
 	// PreviewAsset Show an image as a device model would display it
 	// (POST /assets/{id}/preview)
 	PreviewAsset(w http.ResponseWriter, r *http.Request, id AssetID)
+
+	// (GET /connector-types)
+	ListConnectorTypes(w http.ResponseWriter, r *http.Request)
+
+	// (GET /connectors)
+	ListConnectors(w http.ResponseWriter, r *http.Request)
+
+	// (POST /connectors)
+	CreateConnector(w http.ResponseWriter, r *http.Request)
+	// DeleteConnector Delete a connector and every binding that uses it
+	// (DELETE /connectors/{id})
+	DeleteConnector(w http.ResponseWriter, r *http.Request, id ConnectorID)
+	// UpdateConnector Update name and settings; secret fields left empty keep their stored value
+	// (PUT /connectors/{id})
+	UpdateConnector(w http.ResponseWriter, r *http.Request, id ConnectorID)
+	// TestConnector Fetch once with the given params (not cached)
+	// (POST /connectors/{id}/test)
+	TestConnector(w http.ResponseWriter, r *http.Request, id ConnectorID)
 
 	// (GET /device-models)
 	ListDeviceModels(w http.ResponseWriter, r *http.Request)
@@ -845,6 +1017,15 @@ type ServerInterface interface {
 	// UpdateScreen Save a screen; it re-renders shortly after
 	// (PUT /screens/{id})
 	UpdateScreen(w http.ResponseWriter, r *http.Request, id ScreenID)
+
+	// (GET /screens/{id}/bindings)
+	ListBindings(w http.ResponseWriter, r *http.Request, id ScreenID)
+	// ReplaceBindings Replace the screen's bindings (matched by id; omit id for new ones)
+	// (PUT /screens/{id}/bindings)
+	ReplaceBindings(w http.ResponseWriter, r *http.Request, id ScreenID)
+	// GetScreenData Current data of every binding, as templates see it (fetches what is missing)
+	// (GET /screens/{id}/data)
+	GetScreenData(w http.ResponseWriter, r *http.Request, id ScreenID, params GetScreenDataParams)
 	// PreviewScreen Render a screen, optionally with unsaved templates, without storing it
 	// (POST /screens/{id}/preview)
 	PreviewScreen(w http.ResponseWriter, r *http.Request, id ScreenID)
@@ -939,6 +1120,126 @@ func (siw *ServerInterfaceWrapper) PreviewAsset(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.PreviewAsset(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListConnectorTypes operation middleware
+func (siw *ServerInterfaceWrapper) ListConnectorTypes(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListConnectorTypes(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListConnectors operation middleware
+func (siw *ServerInterfaceWrapper) ListConnectors(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListConnectors(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateConnector operation middleware
+func (siw *ServerInterfaceWrapper) CreateConnector(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateConnector(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteConnector operation middleware
+func (siw *ServerInterfaceWrapper) DeleteConnector(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ConnectorID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteConnector(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateConnector operation middleware
+func (siw *ServerInterfaceWrapper) UpdateConnector(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ConnectorID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateConnector(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// TestConnector operation middleware
+func (siw *ServerInterfaceWrapper) TestConnector(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ConnectorID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TestConnector(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1611,6 +1912,100 @@ func (siw *ServerInterfaceWrapper) UpdateScreen(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// ListBindings operation middleware
+func (siw *ServerInterfaceWrapper) ListBindings(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ScreenID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListBindings(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReplaceBindings operation middleware
+func (siw *ServerInterfaceWrapper) ReplaceBindings(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ScreenID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReplaceBindings(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetScreenData operation middleware
+func (siw *ServerInterfaceWrapper) GetScreenData(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ScreenID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetScreenDataParams
+
+	// ------------- Optional query parameter "sample" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "sample", r.URL.Query(), &params.Sample, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "sample"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sample", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetScreenData(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // PreviewScreen operation middleware
 func (siw *ServerInterfaceWrapper) PreviewScreen(w http.ResponseWriter, r *http.Request) {
 
@@ -1856,9 +2251,20 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/assets", wrapper.UploadAsset)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/assets/{id}", wrapper.DeleteAsset)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/assets/{id}/preview", wrapper.PreviewAsset)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/connector-types", wrapper.ListConnectorTypes)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/connectors", wrapper.ListConnectors)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/connectors", wrapper.CreateConnector)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/connectors/{id}", wrapper.DeleteConnector)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/connectors/{id}", wrapper.UpdateConnector)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/connectors/{id}/test", wrapper.TestConnector)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/screens/{id}/bindings", wrapper.ListBindings)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/screens/{id}/bindings", wrapper.ReplaceBindings)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/screens/{id}/data", wrapper.GetScreenData)
 
 	return m
 }
+
+type ConnectorJSONResponse Connector
 
 type DeviceJSONResponse Device
 
@@ -2004,6 +2410,210 @@ type PreviewAsset404ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response PreviewAsset404ApplicationProblemPlusJSONResponse) VisitPreviewAssetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListConnectorTypesRequestObject struct {
+}
+
+type ListConnectorTypesResponseObject interface {
+	VisitListConnectorTypesResponse(w http.ResponseWriter) error
+}
+
+type ListConnectorTypes200JSONResponse []ConnectorType
+
+func (response ListConnectorTypes200JSONResponse) VisitListConnectorTypesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListConnectorsRequestObject struct {
+}
+
+type ListConnectorsResponseObject interface {
+	VisitListConnectorsResponse(w http.ResponseWriter) error
+}
+
+type ListConnectors200JSONResponse []Connector
+
+func (response ListConnectors200JSONResponse) VisitListConnectorsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateConnectorRequestObject struct {
+	Body *CreateConnectorJSONRequestBody
+}
+
+type CreateConnectorResponseObject interface {
+	VisitCreateConnectorResponse(w http.ResponseWriter) error
+}
+
+type CreateConnector201JSONResponse struct{ ConnectorJSONResponse }
+
+func (response CreateConnector201JSONResponse) VisitCreateConnectorResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateConnector422ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response CreateConnector422ApplicationProblemPlusJSONResponse) VisitCreateConnectorResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteConnectorRequestObject struct {
+	Id ConnectorID `json:"id"`
+}
+
+type DeleteConnectorResponseObject interface {
+	VisitDeleteConnectorResponse(w http.ResponseWriter) error
+}
+
+type DeleteConnector204Response struct {
+}
+
+func (response DeleteConnector204Response) VisitDeleteConnectorResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteConnector404ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteConnector404ApplicationProblemPlusJSONResponse) VisitDeleteConnectorResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateConnectorRequestObject struct {
+	Id   ConnectorID `json:"id"`
+	Body *UpdateConnectorJSONRequestBody
+}
+
+type UpdateConnectorResponseObject interface {
+	VisitUpdateConnectorResponse(w http.ResponseWriter) error
+}
+
+type UpdateConnector200JSONResponse struct{ ConnectorJSONResponse }
+
+func (response UpdateConnector200JSONResponse) VisitUpdateConnectorResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateConnector404ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateConnector404ApplicationProblemPlusJSONResponse) VisitUpdateConnectorResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateConnector422ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateConnector422ApplicationProblemPlusJSONResponse) VisitUpdateConnectorResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestConnectorRequestObject struct {
+	Id   ConnectorID `json:"id"`
+	Body *TestConnectorJSONRequestBody
+}
+
+type TestConnectorResponseObject interface {
+	VisitTestConnectorResponse(w http.ResponseWriter) error
+}
+
+type TestConnector200JSONResponse ConnectorTestResult
+
+func (response TestConnector200JSONResponse) VisitTestConnectorResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestConnector404ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response TestConnector404ApplicationProblemPlusJSONResponse) VisitTestConnectorResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -3010,6 +3620,136 @@ func (response UpdateScreen422ApplicationProblemPlusJSONResponse) VisitUpdateScr
 	return err
 }
 
+type ListBindingsRequestObject struct {
+	Id ScreenID `json:"id"`
+}
+
+type ListBindingsResponseObject interface {
+	VisitListBindingsResponse(w http.ResponseWriter) error
+}
+
+type ListBindings200JSONResponse []Binding
+
+func (response ListBindings200JSONResponse) VisitListBindingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListBindings404ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListBindings404ApplicationProblemPlusJSONResponse) VisitListBindingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceBindingsRequestObject struct {
+	Id   ScreenID `json:"id"`
+	Body *ReplaceBindingsJSONRequestBody
+}
+
+type ReplaceBindingsResponseObject interface {
+	VisitReplaceBindingsResponse(w http.ResponseWriter) error
+}
+
+type ReplaceBindings200JSONResponse []Binding
+
+func (response ReplaceBindings200JSONResponse) VisitReplaceBindingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceBindings404ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ReplaceBindings404ApplicationProblemPlusJSONResponse) VisitReplaceBindingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceBindings422ApplicationProblemPlusJSONResponse Problem
+
+func (response ReplaceBindings422ApplicationProblemPlusJSONResponse) VisitReplaceBindingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetScreenDataRequestObject struct {
+	Id     ScreenID `json:"id"`
+	Params GetScreenDataParams
+}
+
+type GetScreenDataResponseObject interface {
+	VisitGetScreenDataResponse(w http.ResponseWriter) error
+}
+
+type GetScreenData200JSONResponse map[string]BindingData
+
+func (response GetScreenData200JSONResponse) VisitGetScreenDataResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetScreenData404ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetScreenData404ApplicationProblemPlusJSONResponse) VisitGetScreenDataResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type PreviewScreenRequestObject struct {
 	Id   ScreenID `json:"id"`
 	Body *PreviewScreenJSONRequestBody
@@ -3175,6 +3915,24 @@ type StrictServerInterface interface {
 	// (POST /assets/{id}/preview)
 	PreviewAsset(ctx context.Context, request PreviewAssetRequestObject) (PreviewAssetResponseObject, error)
 
+	// (GET /connector-types)
+	ListConnectorTypes(ctx context.Context, request ListConnectorTypesRequestObject) (ListConnectorTypesResponseObject, error)
+
+	// (GET /connectors)
+	ListConnectors(ctx context.Context, request ListConnectorsRequestObject) (ListConnectorsResponseObject, error)
+
+	// (POST /connectors)
+	CreateConnector(ctx context.Context, request CreateConnectorRequestObject) (CreateConnectorResponseObject, error)
+	// DeleteConnector Delete a connector and every binding that uses it
+	// (DELETE /connectors/{id})
+	DeleteConnector(ctx context.Context, request DeleteConnectorRequestObject) (DeleteConnectorResponseObject, error)
+	// UpdateConnector Update name and settings; secret fields left empty keep their stored value
+	// (PUT /connectors/{id})
+	UpdateConnector(ctx context.Context, request UpdateConnectorRequestObject) (UpdateConnectorResponseObject, error)
+	// TestConnector Fetch once with the given params (not cached)
+	// (POST /connectors/{id}/test)
+	TestConnector(ctx context.Context, request TestConnectorRequestObject) (TestConnectorResponseObject, error)
+
 	// (GET /device-models)
 	ListDeviceModels(ctx context.Context, request ListDeviceModelsRequestObject) (ListDeviceModelsResponseObject, error)
 	// SetToneCurve Save a model's gray tone curve; its screens re-render
@@ -3249,6 +4007,15 @@ type StrictServerInterface interface {
 	// UpdateScreen Save a screen; it re-renders shortly after
 	// (PUT /screens/{id})
 	UpdateScreen(ctx context.Context, request UpdateScreenRequestObject) (UpdateScreenResponseObject, error)
+
+	// (GET /screens/{id}/bindings)
+	ListBindings(ctx context.Context, request ListBindingsRequestObject) (ListBindingsResponseObject, error)
+	// ReplaceBindings Replace the screen's bindings (matched by id; omit id for new ones)
+	// (PUT /screens/{id}/bindings)
+	ReplaceBindings(ctx context.Context, request ReplaceBindingsRequestObject) (ReplaceBindingsResponseObject, error)
+	// GetScreenData Current data of every binding, as templates see it (fetches what is missing)
+	// (GET /screens/{id}/data)
+	GetScreenData(ctx context.Context, request GetScreenDataRequestObject) (GetScreenDataResponseObject, error)
 	// PreviewScreen Render a screen, optionally with unsaved templates, without storing it
 	// (POST /screens/{id}/preview)
 	PreviewScreen(ctx context.Context, request PreviewScreenRequestObject) (PreviewScreenResponseObject, error)
@@ -3409,6 +4176,177 @@ func (sh *strictHandler) PreviewAsset(w http.ResponseWriter, r *http.Request, id
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(PreviewAssetResponseObject); ok {
 		if err := validResponse.VisitPreviewAssetResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListConnectorTypes operation middleware
+func (sh *strictHandler) ListConnectorTypes(w http.ResponseWriter, r *http.Request) {
+	var request ListConnectorTypesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListConnectorTypes(ctx, request.(ListConnectorTypesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListConnectorTypes")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListConnectorTypesResponseObject); ok {
+		if err := validResponse.VisitListConnectorTypesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListConnectors operation middleware
+func (sh *strictHandler) ListConnectors(w http.ResponseWriter, r *http.Request) {
+	var request ListConnectorsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListConnectors(ctx, request.(ListConnectorsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListConnectors")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListConnectorsResponseObject); ok {
+		if err := validResponse.VisitListConnectorsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateConnector operation middleware
+func (sh *strictHandler) CreateConnector(w http.ResponseWriter, r *http.Request) {
+	var request CreateConnectorRequestObject
+
+	var body CreateConnectorJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateConnector(ctx, request.(CreateConnectorRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateConnector")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateConnectorResponseObject); ok {
+		if err := validResponse.VisitCreateConnectorResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteConnector operation middleware
+func (sh *strictHandler) DeleteConnector(w http.ResponseWriter, r *http.Request, id ConnectorID) {
+	var request DeleteConnectorRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteConnector(ctx, request.(DeleteConnectorRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteConnector")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteConnectorResponseObject); ok {
+		if err := validResponse.VisitDeleteConnectorResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateConnector operation middleware
+func (sh *strictHandler) UpdateConnector(w http.ResponseWriter, r *http.Request, id ConnectorID) {
+	var request UpdateConnectorRequestObject
+
+	request.Id = id
+
+	var body UpdateConnectorJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateConnector(ctx, request.(UpdateConnectorRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateConnector")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateConnectorResponseObject); ok {
+		if err := validResponse.VisitUpdateConnectorResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// TestConnector operation middleware
+func (sh *strictHandler) TestConnector(w http.ResponseWriter, r *http.Request, id ConnectorID) {
+	var request TestConnectorRequestObject
+
+	request.Id = id
+
+	var body TestConnectorJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.TestConnector(ctx, request.(TestConnectorRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "TestConnector")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(TestConnectorResponseObject); ok {
+		if err := validResponse.VisitTestConnectorResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -4110,6 +5048,92 @@ func (sh *strictHandler) UpdateScreen(w http.ResponseWriter, r *http.Request, id
 	}
 }
 
+// ListBindings operation middleware
+func (sh *strictHandler) ListBindings(w http.ResponseWriter, r *http.Request, id ScreenID) {
+	var request ListBindingsRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListBindings(ctx, request.(ListBindingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListBindings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListBindingsResponseObject); ok {
+		if err := validResponse.VisitListBindingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReplaceBindings operation middleware
+func (sh *strictHandler) ReplaceBindings(w http.ResponseWriter, r *http.Request, id ScreenID) {
+	var request ReplaceBindingsRequestObject
+
+	request.Id = id
+
+	var body ReplaceBindingsJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReplaceBindings(ctx, request.(ReplaceBindingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReplaceBindings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReplaceBindingsResponseObject); ok {
+		if err := validResponse.VisitReplaceBindingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetScreenData operation middleware
+func (sh *strictHandler) GetScreenData(w http.ResponseWriter, r *http.Request, id ScreenID, params GetScreenDataParams) {
+	var request GetScreenDataRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetScreenData(ctx, request.(GetScreenDataRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetScreenData")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetScreenDataResponseObject); ok {
+		if err := validResponse.VisitGetScreenDataResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // PreviewScreen operation middleware
 func (sh *strictHandler) PreviewScreen(w http.ResponseWriter, r *http.Request, id ScreenID) {
 	var request PreviewScreenRequestObject
@@ -4227,86 +5251,102 @@ func (sh *strictHandler) GetSystem(w http.ResponseWriter, r *http.Request) {
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"3Fx7c+M2kv8qKN5WraeWlmXHyW40lT8m45nEF8+ub5zcXVUyp4LIloQYBBgAlKxM+btf4cWHCIqULDu5",
-	"+8sWiVc3un/d6G7wc5TwLOcMmJLR5HOUY4EzUCDMrzdSgrq+0v8SFk2iHKtlFEcMZxBNIpJGcSTgt4II",
-	"SKOJEgXEkUyWkGHdY85FhpVux9RXl1EcqU0O9icsQESPj3F0BSuSwHPOcEMyosrhfytAbKrxqXlZHzKF",
-	"OS6oiibn43EcZfiBZEUWTb40vwizv86DM33gKdDnJOWW4g0l8lk35C4RAOz5ZnjU3WXOmQQjYVYA9H8J",
-	"ZwqY2Sqc55QkWBHOzn6VnOln1SR/ETCPJtG/nVWSe2bfyjM3nJknBZkIkutRokn04xJQ6t5WrDzaxOWA",
-	"HVPn5fs4uhV8RiHbMXduW/xtzzW4cQNLeCcEF1G5v0cj2w3XQbT0b72MVKCi/8kFz0EoYiUhEYAVpFOs",
-	"GpKUYgWnimRQSZNUgrCFpmYJZLE07bcFLdaiOkQivWh/bo8uye8wcIxCUIse2yzggiwIwxQVOeU4RSdz",
-	"LpBaFtmMYULlq1GIrDVJ1TJE1WNd+X622miWb1fge5aMcTTEdeZ+Kifks18hMRL5LU7uF4IXLG3vC9bb",
-	"NSWp+UEUZHIgT9wTLATe6N8pUUsQfRJ1neEFXNmmj3E0J2pQj/fEEHJPLAnANE7/HDHONPlEN9HcoCQF",
-	"ueTr6FOA7VykIBpGIJLwWwFMEayZ6wdtPJTLYj6nEBhwa7PM0kLMryBwi/E5md7DJiiaOM8FX+3WFlZQ",
-	"imcUPEy3BkkwJTOBFWGLacEUCYjwfy0JBUQYUktA80IVAmKkSihFmpfSPFgIvEHliJyhHCsFgmkBP3B5",
-	"BwDCnIhsjQVMVyAksUjWO9FcEGAp3UwtZMADznLdPPrh7/9x8d8fQvMMBheKZ0CDW0ixVFMJwJ60hxQr",
-	"kL0q8iNQyEAJo4cZTppkvnkz+fbbydu3k6urybt3k/fvQxRn2ruZdtDdscwaH7z9O3wEAXMBcjkVWEFb",
-	"UO8g4SyVaAZqDcDQGt+DHEXhgXIutGBV1mPI7K6T4cMgsSq7lHDeP42kAPkU2JYgjr+ajMdDxMH2lwoL",
-	"1Rzh4mLoCAqrQg7zs+5sW23/8nRPXQ2ZMi2ZcYl7TcX0qlSucEsiGnjRWFA35t7wRRt2LbJNKV8cLqtu",
-	"DEP5waoND0oYBwynKdFijultbaW2V8coFaXDkQpWAwU7Aym1PQ2hmoAEyGpP1Ja8EJrlhMFANbEdzNmk",
-	"f8VBUXM0NFe8U1RuHc1NcSk9ovKffr3RchdwkBg8qOkM5lyAE70mxt1iKRGWqGyCFEfGq+Q0BYGAKUFA",
-	"vkaaH2i9BGO2BSAsAGlPqGGLh0rzNvcMmd2M+uDxscmmGVHTFHK7X86ROo8v4stPof0tzfhwtD3KUaDL",
-	"3eo8IijOYJoUYgW9JpgzeGsa7uvgWyx0bn7Lwa8Y21hN9wbdlQDvtiHKgaWanjjCiSIrPU1KpOZ2GvST",
-	"7Tg/GYRt73Tp8WT44QbYQi1dMGU/l6LfASiDM//46rIRnvli3Gtam4r1/feTDx9iBFmuNsiuDyUUsLCu",
-	"remJ1oSlfB08r21Z3WMO/hjYx3crd24PGq7B/NyT/X0eXLuHPf4Pb2+fVHJpCRo5ux55szpytr16kAKF",
-	"xgMJwKpflC9k5JdT6+0eCGApCPPE01hrZLhU/u495Zm3IeV7T4CmNgzT2rm5fhfEl25TuzWvbxia+nvA",
-	"VC3b06ZY4RmWDZ7z+yiOwCzz007vsNEhhYXAaQdc1I5iNY92dD4a93qFpavnx4irRYcorQcPGuf4OeWb",
-	"9FQqIGwGYlE7zLsIQbsBVveESTOnCQx0UFdGHxrzJXwFojaLDrZhoseyb0Ij3eANLwJ67YxSxbvzm4eL",
-	"jyEc6o5kUa5kG5reGUyyESlAcwGAqFmEBqLSn2mupm62WJHNdhvOFYF18MU6OMxD8Okm8HQ7uGJspJlN",
-	"j6L76DniaBmUk6bnFRzL2VvLudAY9RByEIgTXrCnOiT7eZdlgkBBFnQwu+TjOMc3xzK71LjJht4TWbl2",
-	"loeU4GmMyPDDte1X90RafNn2WDLCyt99HGgQv5NABVmbvnQNNBB/+6cRd8TnPuBm4hpGXfVMSCq8kYgz",
-	"F2ofRbWc1fm4L2kVR8Csm1cJxYxzCphVUtpc0L8yogxiMFibJcjgoeIo4Ru0NtFHtSTSUaujje54800t",
-	"DPlXifiaIT10gwMhx3DA4XIvt2XbYpWdY7enFZODUiHAY2QIRNqc0vZvYuLZZzlbvNam8KtL9NPHGy0k",
-	"Ri70O31MrIVpF6A0C4POa1rYgO10cGDfuAfDlfFHyHKKFZQ5qG31E3h9AJ0zwdcShJN8ueRq1AtTeiYP",
-	"TFFJSJMHO3bpow78hxB/CTjsvylHu+yO4wR6NTnxE5N4BSkSsNBx9XJINNv4Z/ewGUWtdT8GKSlzj81Z",
-	"Pr5/i76+/PLvyOUeUQpKZ6j0uNuSqV8EF76nZNR84oBYVL5m4KhAFO04kbtDROWL4Rkv1GRGMbvvFRA7",
-	"bjl3SBY+GpbvdoyeEHuo3LzMOoydMhUmX2AmcyzcCbG5xzeg7JnTqAyalVk/g6xILQUvFksLuFayalJV",
-	"MwzrMKkP4ceb8OPf94t/NJ063b1JbI0v4V1jLrn39KzzgYg5LBdFKHh3pLfx8JN4+NjWfc5TgiwWIJoC",
-	"CakplhngCZbntjqrqlF789FVlQKm9F/zaPLzkDKEuyLLsMlxtaKPjfz2rpFqmXC9GwJnsObivp5PDIQe",
-	"ccBTeqfD9+j7Hz/clCesXFtm3RqdSLWh0JH+t6o3HEYdIvWda9rEuKVXM8Z1TrU35lO5NW/N/gXOqqSf",
-	"xXaEH4hl8Z5RqCO66uXM3RL4AwmFCz3QoG/s9jruIR9I0oa55qG8di7ZN+jXQloArrg8qgUJ/LhlwUJI",
-	"M5ui3j4nDTY3e++UTTVP7dJaTHnvgMu7ZwzWIBWSRZKAlPOCOvaMhme1p6IE7d3ib1qZbj6C8tRYc+dJ",
-	"2S5pqpuKFaZh03bU47TZqJK2GiXtxfQesu2GdkXuD0VJj39NnRwHY/7VFjXF542LPGlXFs0Fz9CZ3Eh9",
-	"6LPP5Qi9XWK20NFzohBOU4m4QAIyvgLvrchRFB9t6/dCmAZobznW5gVy5XZyhN5zgXIBEpSnrUQQLABl",
-	"WCVLCyIkRSdcaJa8QpilWq+I+IUJSBRmCwoSJTwDyy6tc3a416GInn1PpEIpzAlzMQQ37y/shOtzPUnL",
-	"oz1n2jr9woYFAp/g79bYfNnisqshiibR//yMT38fn349/fS3v/Q5xbUhL7rkcMtP/gN9XOve7nReq/DV",
-	"l4HoVQCSOiMgX417Ixjb1rHmJGyjTYlJNeSoNCEIQEanr9mcd4ZN82JGSTINVlR+iyWYGIBtK1EhQSfB",
-	"BeBkWQ94aEkHpm2vzbuROWJcaSWck0UhIA0iRdDdq/zfL0aXo8uoE9SGO2wu0h8483oxmM4LlqgwoHwP",
-	"NAeByhYIrzAx9lQX6rmznR9INkL5Hafl2vwkg985gybh7wq9UWf/SYAxHO1O8ew2bJXnWc4UBzY+yIg4",
-	"6MF63oekrSp7axdX7nHemxkU2kxzEInDiw4PpspZ+D4rTpXzl3r7JEsstIHb0bgGUAeVOg5PPGgvb5pg",
-	"bYqGrUfg9VQjBYj9gl29FUxCSjKwLAiELuTZ6wxdyNk04YxBooZSqoPTUwFYDmS6ae9rwfYtt0lNKrJD",
-	"vOuB1XZog9MiY2HD5Eut2m92F3ctBmm5a+emif1K4p1Zak9NLUI57PDvO7SP/SWIHDdi/Rg8GFcFPm3H",
-	"muLkvgGp9btF49E/ahZ6HACGBc4y3Oh/Xr+bVO89ugj0Xy+Jgs7+5z39tzbXLiZ2RPnB2zuq+xFn6Ld8",
-	"/dtrbbjLc3LCJEVrmKEUy+WMY5GOkK0xQice5V4hYGnOCVPSlbMplGOh7HGTSCRzSF7/wtQSNqaBxQKd",
-	"GtNTSMix0Ef2Lf8AnWi/OiN6oyFFhfZw0JlrZPv+wsplVd28h70iQhWYumGdw+yC05Ghq+r85va6Vsmg",
-	"SyAuR2O9PTwHhnNiPIzx6IvI+L1LIzln5vaF+XdhL81ouTIhtetUR3SJVG9sk62LVRfj8V63fAYphpkq",
-	"oBDtnIW57QKpDX3I2IcD5kRIl5nAC6nFyRGoNSjnMkCiHcrObCURpPqWp5st8rKCKqJF4kybt1OdP2pS",
-	"uF1zQ5u1uTPCsLkb2FlW0STxyiYYpPY/zWFL5yp10/40lJk7rDHNu3WPrU09P9rVLbeX4Ztb2G/05cVF",
-	"10DlymoXz+JI+siU2ziEmYt/ndz+87sY/fvtu+/0yf276/evXiOSAlMkwdSwz6q2VEYXOTM5upacPMZe",
-	"K84+k/TRbgwFC3BN0bkyzyvRaXDyMrSlto5M0z2+3INu3f7rl7zPd6cIpSWI4nZGp1PHavd7O+xq1eTM",
-	"3/99/LTF9bO8lrc+cMguhXfJ1n6N3y37W4fLF7h8tlegabt+rzsYPQQWxk9hzb6VBr345kYMkxK4Gyt4",
-	"AlJ6a7G/+jVg506nMkvQwRJhb/QNj9GaFzRFKZG62BPZjFYIY2ynU9NptwGuFb6/jBmuTTjEGL+htMEC",
-	"2QAH+yZItVV1xRmcljXu+2m7vxNvtL0I8O8OVOU4H67sAyvvj69Kg7cpLPqZ38O97c3hdvkOrwBhO/Vf",
-	"pb24qfcYmT1+jYiSvqgGCTh1SZiDBOZwM9EQnF1m4v+t9Dj6QpLztn3Ndqvgy4LcAhQi6vnFK46+HH9x",
-	"qDja9J09CAboWhO11HBeuCqoxO31LmkcAtcvidRDQNqvqsmcCrpljNw9HXeI6mHBQOf4ytfCPaN3vLXd",
-	"OmNXGeUTopAAnOfmRgyWJZXm/hpRSN+KM9kznCjpDvNiBeJVkANxeN+/A9VF6bifkmoX9yY8tML9kLD8",
-	"RI6BQp0cDJ2RU9zYy+PjYOPS13AofB7GPsn+mTxyiZQSlCLMXBDq16cz992F/e1ZcxeDBu2NHfsPkNMn",
-	"sfONvjOIlVZpr7pcIH+BEJXFtgO4W8P/Xch1p3huSa0Zwv/rih0UiTuFhfpjSX2aq2nLSru/DuLjs04Z",
-	"dVj1izHKCCsUDFRJJ2nPopJXduw/i+lo0W5uNvb7Ojfc4NsWe7Yvly9sXdoai1T6mhIiEeULU4gCDwkt",
-	"JFmBKVoMfU2turq+51fHWpdMGN3oeaUJG2vfEDO7GL0QSlaAdAl650LwXIE4aB3wkFOeQjSZYyohPLr9",
-	"UEIccgV78+um7DOamMVEbcLvipntiyRgkSz9l3dc3qyL3t8aq2nFZno1wX4jT6vBM5+F/VcUAv6vkdGn",
-	"uZZXLrfDF9sJhyPDdUsP8/pdwCeAUEeExDYqLxweKyb61G/yPB4eqvwz+jFSkgXTXoxji6m9Y5yBLb4T",
-	"YC74G30UXHlLPAClVb0MpQeqq5KVlnweGXJfBhMG5ttrn6fqOyg3Gj8BLcpx0JJIxcXm+TEDVu4zq/rH",
-	"sryV33Vidff2nxGV3QyhBBMIA6ZEIrvQTS3M83Jzlx8WaO7dDVkBAymNYqagzx3Akg0q7534rbM1xE4p",
-	"vWLvdpluy1YvIfq3te+CDonjVzTUXcTqaXce3V7ZOIIRGXTx2tziHp7R7lHgGpP2RvgQjxrSMDBS1uDc",
-	"c8bKwpvaBRLdyxrvydjjrHM/gKx90rjTAbIxpz+f4D4rf5/kynyEnOLEVqMYiDRQhE7sn3uA3F4l0Mcp",
-	"E2ZdaDx9FYX3VCuLywftBM471+YlYHP7wt8g7PRJrROdUzB3InyR9KuGQHti+7DULuKZBLJxz+5YQOpW",
-	"/MT4qVlTVXRiMjQ6fzgvKD3VHxz219K16GFk3GYQqHa9rc3pmpANxOMa918CjetC0YXFXUsa77Uzx1jh",
-	"fihcfvS9B4NfQOCPnGA4lK2lghy1oGu7xDmAU9dshSlJEdF2CPFKa5DcMIUfkCtlDqb0rQToDH6VuJf6",
-	"br9QdINMVGyQ8h2etm9K0q68/bPK0tb3Oh4fHzuk57kz9T/WPlRi98Nf5PMh7wNLno6RcvcCEyOe26sa",
-	"dGPR3CfbSwMZI28zpeLCXsIcJkpOCgd4Dh9dy5fwH6o7w32Og1/VU7PehuN9kYZjQXhQ8ewadtqoo6iD",
-	"521YG/TlUlFy/+ks1eqkmQqI8XW3SNo4wI5gi72Z+Jx8qd19DAU9zFtEmA3e6YdbGG+qHuoNLIyU9wsY",
-	"QBqOffirUU6UzNXK6Azn5Gx1bgTGdfnsw4qu62NcPvExsNojz+Hao1p0onroqioD2Q6zptM7YAqZb5rK",
-	"EbrOcgoZMGUrm5d6e0/0ZY8FML1jkL5CM0hwIUGbOakEYPsNMr8q80QH3P53AA==",
+	"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",
+	"OkL6CM0hwaXQtlNIDtjcz+3Wqp8oU/c/AwA=",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: cnsl dashboard API
-  version: 0.4.0
+  version: 0.5.0
   description: |
     API used by the cnsl web dashboard. Device (firmware) endpoints are not part of this spec;
     they are served on the separate device listener (and mirrored under /device on the
@@ -15,6 +15,7 @@ tags:
   - name: screens
   - name: playlists
   - name: assets
+  - name: connectors
   - name: stream
     description: Server-Sent Events. Implemented by hand (not generated) because it streams.
 
@@ -606,6 +607,172 @@ paths:
         "404":
           $ref: "#/components/responses/Problem"
 
+  /connector-types:
+    get:
+      operationId: listConnectorTypes
+      tags: [connectors]
+      responses:
+        "200":
+          description: Available connector types with their settings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ConnectorType"
+
+  /connectors:
+    get:
+      operationId: listConnectors
+      tags: [connectors]
+      responses:
+        "200":
+          description: Configured connectors (secrets are never returned)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Connector"
+    post:
+      operationId: createConnector
+      tags: [connectors]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConnectorInput"
+      responses:
+        "201":
+          $ref: "#/components/responses/Connector"
+        "422":
+          $ref: "#/components/responses/Problem"
+
+  /connectors/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ConnectorID"
+    put:
+      operationId: updateConnector
+      summary: Update name and settings; secret fields left empty keep their stored value
+      tags: [connectors]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConnectorInput"
+      responses:
+        "200":
+          $ref: "#/components/responses/Connector"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: deleteConnector
+      summary: Delete a connector and every binding that uses it
+      tags: [connectors]
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          $ref: "#/components/responses/Problem"
+
+  /connectors/{id}/test:
+    parameters:
+      - $ref: "#/components/parameters/ConnectorID"
+    post:
+      operationId: testConnector
+      summary: Fetch once with the given params (not cached)
+      tags: [connectors]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                params:
+                  type: object
+                  additionalProperties: true
+      responses:
+        "200":
+          description: Result of the fetch
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConnectorTestResult"
+        "404":
+          $ref: "#/components/responses/Problem"
+
+  /screens/{id}/bindings:
+    parameters:
+      - $ref: "#/components/parameters/ScreenID"
+    get:
+      operationId: listBindings
+      tags: [connectors]
+      responses:
+        "200":
+          description: The screen's bindings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Binding"
+        "404":
+          $ref: "#/components/responses/Problem"
+    put:
+      operationId: replaceBindings
+      summary: Replace the screen's bindings (matched by id; omit id for new ones)
+      tags: [connectors]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              maxItems: 30
+              items:
+                $ref: "#/components/schemas/Binding"
+      responses:
+        "200":
+          description: The saved bindings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Binding"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+
+  /screens/{id}/data:
+    parameters:
+      - $ref: "#/components/parameters/ScreenID"
+    get:
+      operationId: getScreenData
+      summary: Current data of every binding, as templates see it (fetches what is missing)
+      tags: [connectors]
+      parameters:
+        - name: sample
+          in: query
+          schema: { type: boolean, default: false }
+      responses:
+        "200":
+          description: Data by binding alias
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  $ref: "#/components/schemas/BindingData"
+        "404":
+          $ref: "#/components/responses/Problem"
+
 components:
   parameters:
     DeviceID:
@@ -624,6 +791,11 @@ components:
       required: true
       schema: { type: integer, format: int64 }
     ModelID:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer, format: int64 }
+    ConnectorID:
       name: id
       in: path
       required: true
@@ -657,6 +829,12 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/Playlist"
+    Connector:
+      description: The connector
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Connector"
     Problem:
       description: Error
       content:
@@ -1000,6 +1178,9 @@ components:
     PreviewRequest:
       type: object
       properties:
+        sample:
+          type: boolean
+          description: Use connector sample data instead of real data.
         templates:
           type: object
           description: Unsaved region templates by region key.
@@ -1029,6 +1210,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/TemplateError"
+        data_errors:
+          type: object
+          description: Connector problems by binding alias.
+          additionalProperties: { type: string }
         duration_ms: { type: integer, format: int64 }
 
     TemplateProblem:
@@ -1100,6 +1285,111 @@ components:
         height: { type: integer }
         size: { type: integer, format: int64 }
         created_at: { type: string, format: date-time }
+
+    ConnectorField:
+      type: object
+      required: [key, label, kind]
+      properties:
+        key: { type: string }
+        label: { type: string }
+        help: { type: string }
+        kind:
+          type: string
+          enum: [string, secret, url, int, number, bool, select, list, text]
+        required: { type: boolean }
+        default: {}
+        options:
+          type: array
+          items: { type: string }
+
+    ConnectorType:
+      type: object
+      required: [key, name, description, config_schema, params_schema]
+      properties:
+        key: { type: string, example: homeassistant }
+        name: { type: string }
+        description: { type: string }
+        config_schema:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConnectorField"
+        params_schema:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConnectorField"
+
+    Connector:
+      type: object
+      required: [id, type, name, config, secrets_set, binding_count, updated_at]
+      properties:
+        id: { type: integer, format: int64 }
+        type: { type: string }
+        name: { type: string }
+        config:
+          type: object
+          additionalProperties: true
+          description: Settings without secret fields.
+        secrets_set:
+          type: array
+          items: { type: string }
+          description: Secret fields that have a stored value.
+        binding_count: { type: integer }
+        updated_at: { type: string, format: date-time }
+
+    ConnectorInput:
+      type: object
+      required: [name, config]
+      properties:
+        type:
+          type: string
+          description: Required when creating; ignored on update.
+        name: { type: string, minLength: 1, maxLength: 100 }
+        config:
+          type: object
+          additionalProperties: true
+
+    ConnectorTestResult:
+      type: object
+      required: [ok, duration_ms]
+      properties:
+        ok: { type: boolean }
+        data: {}
+        error: { type: string }
+        duration_ms: { type: integer, format: int64 }
+
+    Binding:
+      type: object
+      required: [connector_id, alias, params, ttl, enabled]
+      properties:
+        id: { type: integer, format: int64 }
+        connector_id: { type: integer, format: int64 }
+        alias:
+          type: string
+          pattern: "^[a-z][a-z0-9_]*$"
+          maxLength: 40
+          description: Templates read the data as .Data.<alias>.
+        region_key:
+          type: string
+          nullable: true
+          description: Only this region sees the data; null = every region.
+        params:
+          type: object
+          additionalProperties: true
+        ttl:
+          type: integer
+          minimum: 30
+          maximum: 86400
+          description: Seconds before the data is fetched again.
+        enabled: { type: boolean }
+
+    BindingData:
+      type: object
+      required: [stale]
+      properties:
+        data: {}
+        stale: { type: boolean }
+        fetched_at: { type: string, format: date-time, nullable: true }
+        error: { type: string }
 
     Problem:
       description: RFC 9457 problem details.

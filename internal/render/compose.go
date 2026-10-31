@@ -56,6 +56,8 @@ type page struct {
 	screen     store.Screen
 	model      store.DeviceModel
 	background string // URL of the prepared background image, or ""
+	// data returns the connector data visible to a region (screen-wide plus its own bindings).
+	data func(regionKey string) (map[string]any, map[string]bool)
 }
 
 // compose builds the page for a screen. Region rectangles are in device pixels and are converted
@@ -82,6 +84,9 @@ func compose(p page, regions []store.Region, ctx tmpl.Context) (string, []*tmpl.
 	for _, r := range ordered(layout, regions) {
 		rctx := ctx
 		rctx.Region = tmpl.RegionInfo{Key: r.Key, Width: r.W, Height: r.H}
+		if p.data != nil {
+			rctx.Data, rctx.Stale = p.data(r.Key)
+		}
 		body, err := tmpl.Render(r.Key, r.Template, rctx)
 		if err != nil {
 			te, ok := err.(*tmpl.Error)

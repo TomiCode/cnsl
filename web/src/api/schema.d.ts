@@ -427,6 +427,115 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/connector-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listConnectorTypes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/connectors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listConnectors"];
+        put?: never;
+        post: operations["createConnector"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/connectors/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ConnectorID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Update name and settings; secret fields left empty keep their stored value */
+        put: operations["updateConnector"];
+        post?: never;
+        /** Delete a connector and every binding that uses it */
+        delete: operations["deleteConnector"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/connectors/{id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ConnectorID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Fetch once with the given params (not cached) */
+        post: operations["testConnector"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/screens/{id}/bindings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ScreenID"];
+            };
+            cookie?: never;
+        };
+        get: operations["listBindings"];
+        /** Replace the screen's bindings (matched by id; omit id for new ones) */
+        put: operations["replaceBindings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/screens/{id}/data": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ScreenID"];
+            };
+            cookie?: never;
+        };
+        /** Current data of every binding, as templates see it (fetches what is missing) */
+        get: operations["getScreenData"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -703,6 +812,8 @@ export interface components {
             }[];
         };
         PreviewRequest: {
+            /** @description Use connector sample data instead of real data. */
+            sample?: boolean;
             /** @description Unsaved region templates by region key. */
             templates?: {
                 [key: string]: string;
@@ -721,6 +832,10 @@ export interface components {
             /** @description data:image/png;base64 URL of the image as the device gets it. */
             device: string;
             errors: components["schemas"]["TemplateError"][];
+            /** @description Connector problems by binding alias. */
+            data_errors?: {
+                [key: string]: string;
+            };
             /** Format: int64 */
             duration_ms: number;
         };
@@ -767,6 +882,77 @@ export interface components {
             /** Format: date-time */
             created_at: string;
         };
+        ConnectorField: {
+            key: string;
+            label: string;
+            help?: string;
+            /** @enum {string} */
+            kind: "string" | "secret" | "url" | "int" | "number" | "bool" | "select" | "list" | "text";
+            required?: boolean;
+            default?: unknown;
+            options?: string[];
+        };
+        ConnectorType: {
+            /** @example homeassistant */
+            key: string;
+            name: string;
+            description: string;
+            config_schema: components["schemas"]["ConnectorField"][];
+            params_schema: components["schemas"]["ConnectorField"][];
+        };
+        Connector: {
+            /** Format: int64 */
+            id: number;
+            type: string;
+            name: string;
+            /** @description Settings without secret fields. */
+            config: {
+                [key: string]: unknown;
+            };
+            /** @description Secret fields that have a stored value. */
+            secrets_set: string[];
+            binding_count: number;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        ConnectorInput: {
+            /** @description Required when creating; ignored on update. */
+            type?: string;
+            name: string;
+            config: {
+                [key: string]: unknown;
+            };
+        };
+        ConnectorTestResult: {
+            ok: boolean;
+            data?: unknown;
+            error?: string;
+            /** Format: int64 */
+            duration_ms: number;
+        };
+        Binding: {
+            /** Format: int64 */
+            id?: number;
+            /** Format: int64 */
+            connector_id: number;
+            /** @description Templates read the data as .Data.<alias>. */
+            alias: string;
+            /** @description Only this region sees the data; null = every region. */
+            region_key?: string | null;
+            params: {
+                [key: string]: unknown;
+            };
+            /** @description Seconds before the data is fetched again. */
+            ttl: number;
+            enabled: boolean;
+        };
+        BindingData: {
+            data?: unknown;
+            stale: boolean;
+            /** Format: date-time */
+            fetched_at?: string | null;
+            error?: string;
+        };
         /** @description RFC 9457 problem details. */
         Problem: {
             /** @default about:blank */
@@ -809,6 +995,15 @@ export interface components {
                 "application/json": components["schemas"]["Playlist"];
             };
         };
+        /** @description The connector */
+        Connector: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Connector"];
+            };
+        };
         /** @description Error */
         Problem: {
             headers: {
@@ -824,6 +1019,7 @@ export interface components {
         ScreenID: number;
         PlaylistID: number;
         ModelID: number;
+        ConnectorID: number;
         AssetID: number;
         Limit: number;
     };
@@ -1575,6 +1771,213 @@ export interface operations {
                     "application/json": {
                         /** @description data:image/png;base64 URL */
                         device: string;
+                    };
+                };
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    listConnectorTypes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Available connector types with their settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectorType"][];
+                };
+            };
+        };
+    };
+    listConnectors: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Configured connectors (secrets are never returned) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Connector"][];
+                };
+            };
+        };
+    };
+    createConnector: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectorInput"];
+            };
+        };
+        responses: {
+            201: components["responses"]["Connector"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    updateConnector: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ConnectorID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectorInput"];
+            };
+        };
+        responses: {
+            200: components["responses"]["Connector"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    deleteConnector: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ConnectorID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    testConnector: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ConnectorID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    params?: {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+        responses: {
+            /** @description Result of the fetch */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectorTestResult"];
+                };
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    listBindings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ScreenID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The screen's bindings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Binding"][];
+                };
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    replaceBindings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ScreenID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Binding"][];
+            };
+        };
+        responses: {
+            /** @description The saved bindings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Binding"][];
+                };
+            };
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getScreenData: {
+        parameters: {
+            query?: {
+                sample?: boolean;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["ScreenID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Data by binding alias */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: components["schemas"]["BindingData"];
                     };
                 };
             };

@@ -16,6 +16,7 @@ import (
 
 	"github.com/TomiCode/cnsl/internal/assets"
 	"github.com/TomiCode/cnsl/internal/config"
+	"github.com/TomiCode/cnsl/internal/connector"
 	"github.com/TomiCode/cnsl/internal/dashboard"
 	"github.com/TomiCode/cnsl/internal/device"
 	"github.com/TomiCode/cnsl/internal/events"
@@ -65,6 +66,8 @@ func run() error {
 	files := imaging.Files{Dir: cfg.ImagesDir()}
 	devices := device.NewService(st, broker, files, cfg.Timezone, logger)
 
+	connectors := connector.NewService(st, logger)
+
 	browser := render.NewBrowser(cfg.ChromeURL, 2, logger)
 	defer browser.Close()
 	renderer := render.NewRenderer(render.Options{
@@ -77,10 +80,17 @@ func run() error {
 
 		UploadsDir: cfg.UploadsDir(),
 		CacheDir:   cfg.CacheDir(),
+		Data:       connectors,
 	})
 	scheduler := render.NewScheduler(renderer, st, broker, logger)
 	devices.SetScreens(scheduler)
 	go scheduler.Run(ctx)
+	connectors.OnChange = func(screenIDs []int64) {
+		for _, id := range screenIDs {
+			scheduler.Request(id, "data")
+		}
+	}
+	go connectors.Run(ctx)
 	go st.RunRetention(ctx, 30*24*time.Hour, 90*24*time.Hour, logger)
 
 	api, err := dashboard.NewServer(dashboard.Options{
@@ -93,6 +103,7 @@ func run() error {
 		Renderer:        renderer,
 		Scheduler:       scheduler,
 		UploadsDir:      cfg.UploadsDir(),
+		Connectors:      connectors,
 	}).Handler()
 	if err != nil {
 		return err

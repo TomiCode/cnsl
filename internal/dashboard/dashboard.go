@@ -13,6 +13,7 @@ import (
 	middleware "github.com/oapi-codegen/nethttp-middleware"
 
 	"github.com/TomiCode/cnsl/internal/assets"
+	"github.com/TomiCode/cnsl/internal/connector"
 	"github.com/TomiCode/cnsl/internal/dashboard/gen"
 	"github.com/TomiCode/cnsl/internal/device"
 	"github.com/TomiCode/cnsl/internal/events"
@@ -34,6 +35,7 @@ type Options struct {
 	Renderer        *render.Renderer
 	Scheduler       *render.Scheduler
 	UploadsDir      string
+	Connectors      *connector.Service
 }
 
 type Server struct {
@@ -46,6 +48,7 @@ type Server struct {
 	renderer        *render.Renderer
 	scheduler       *render.Scheduler
 	uploadsDir      string
+	connectors      *connector.Service
 }
 
 var _ gen.StrictServerInterface = (*Server)(nil)
@@ -61,6 +64,7 @@ func NewServer(opts Options) *Server {
 		renderer:        opts.Renderer,
 		scheduler:       opts.Scheduler,
 		uploadsDir:      opts.UploadsDir,
+		connectors:      opts.Connectors,
 	}
 }
 

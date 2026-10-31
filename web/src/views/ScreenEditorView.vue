@@ -4,6 +4,9 @@ import { RouterLink, onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, CircleAlert, CircleCheck, Eye, Loader2, Play, Plus, Save, Trash2, X } from 'lucide-vue-next'
 import CodeEditor from '@/components/CodeEditor.vue'
 import BackgroundPanel from '@/components/BackgroundPanel.vue'
+import DataPanel from '@/components/DataPanel.vue'
+import { dataPaths } from '@/lib/datapaths'
+import { setDataFields } from '@/lib/monaco'
 import { api, type Schemas } from '@/api/client'
 import { ApiError, unwrap, useDevicesStore } from '@/stores/devices'
 import { useEventsStore } from '@/stores/events'
@@ -54,6 +57,8 @@ const saving = ref(false)
 const errors = ref<TemplateError[]>([])
 const message = ref<{ ok: boolean; text: string } | null>(null)
 const renders = ref<Schemas['Render'][]>([])
+const screenData = ref<Record<string, Schemas['BindingData']>>({})
+const sample = ref(false)
 
 const isImage = computed(() => screen.value?.kind === 'image')
 const model = computed(() => devices.models.find((m) => m.id === draft.model_id))
@@ -93,6 +98,15 @@ function reset(s: Schemas['Screen']) {
   }
 }
 
+async function loadData() {
+  try {
+    screenData.value = unwrap(await api.GET('/screens/{id}/data', { params: { path: { id: id.value }, query: { sample: sample.value } } }))
+    setDataFields(dataPaths(screenData.value))
+  } catch (e) {
+    message.value = { ok: false, text: (e as Error).message }
+  }
+}
+
 async function loadRenders() {
   renders.value = unwrap(await api.GET('/screens/{id}/renders', { params: { path: { id: id.value } } }))
 }
@@ -110,6 +124,7 @@ onMounted(async () => {
     reset(unwrap(sc))
     await loadRenders()
     void runPreview()
+    if (!isImage.value) void loadData()
   } catch (e) {
     message.value = { ok: false, text: (e as Error).message }
   }
@@ -172,7 +187,7 @@ async function runPreview() {
   try {
     const templates = Object.fromEntries(draft.regions.map((r) => [r.key, r.template]))
     const res = unwrap(
-      await api.POST('/screens/{id}/preview', { params: { path: { id: id.value } }, body: { templates, head: draft.head } }),
+      await api.POST('/screens/{id}/preview', { params: { path: { id: id.value } }, body: { templates, head: draft.head, sample: sample.value } }),
     )
     preview.value = res
     errors.value = res.errors
@@ -254,6 +269,7 @@ const tabs = computed(() => {
   return [
     ...draft.regions.map((r) => ({ key: r.key, label: r.key })),
     ...(isFree.value ? [{ key: 'regions', label: 'Regions' }] : []),
+    { key: 'data', label: 'Data' },
     { key: 'background', label: 'Background' },
     { key: 'head', label: 'Head (CSS)' },
   ]
@@ -348,6 +364,16 @@ const num = 'w-20 rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm f
           </div>
         </template>
 
+        <div v-else-if="tab === 'data'" class="min-h-0 flex-1 overflow-y-auto p-4">
+          <DataPanel
+            :screen-id="screen.id"
+            :region-keys="draft.regions.map((r) => r.key)"
+            :data="screenData"
+            @saved="loadData().then(runPreview)"
+            @refresh="loadData"
+          />
+        </div>
+
         <div v-else-if="tab === 'head'" class="min-h-0 flex-1">
           <CodeEditor key="head" v-model="draft.head" :functions="functions" @save="save" @preview="runPreview" />
         </div>
@@ -410,6 +436,10 @@ const num = 'w-20 rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm f
               {{ z === 'fit' ? 'Fit' : '1:1' }}
             </button>
           </div>
+          <label v-if="!isImage" class="flex items-center gap-1.5 text-zinc-600" title="Use made-up data instead of fetching from connectors">
+            <input v-model="sample" type="checkbox" @change="runPreview" />
+            sample data
+          </label>
           <span v-if="preview" class="ml-auto text-xs text-zinc-400">{{ preview.duration_ms }} ms · {{ model?.width }}×{{ model?.height }}</span>
         </div>
 
@@ -441,6 +471,12 @@ const num = 'w-20 rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm f
             {{ previewing ? 'Rendering…' : isImage ? 'Choose an image and save' : 'No preview yet' }}
           </div>
 
+          <ul v-if="preview?.data_errors" class="mt-4 space-y-1">
+            <li v-for="(msg, alias) in preview.data_errors" :key="alias" class="flex items-start gap-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              <CircleAlert class="mt-0.5 size-4 shrink-0" />
+              <span><span class="font-mono text-xs">.Data.{{ alias }}</span> {{ msg }}</span>
+            </li>
+          </ul>
           <ul v-if="errors.length" class="mt-4 space-y-1">
             <li v-for="(e, i) in errors" :key="i">
               <button type="button" class="flex w-full items-start gap-2 rounded-md bg-red-50 px-3 py-2 text-left text-sm text-red-800 hover:bg-red-100" @click="reveal(e)">
