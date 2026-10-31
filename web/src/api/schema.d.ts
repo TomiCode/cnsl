@@ -206,6 +206,192 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/devices/{id}/playlist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["DeviceID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Assign a playlist (or none) and restart the rotation */
+        put: operations["setDevicePlaylist"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/devices/{id}/calibration": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["DeviceID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Show the gray calibration pattern on the device for 30 minutes */
+        post: operations["startDeviceCalibration"];
+        delete: operations["stopDeviceCalibration"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/device-models/{id}/tone-curve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ModelID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Save a model's gray tone curve; its screens re-render */
+        put: operations["setToneCurve"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/device-models/{id}/tone-curve/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ModelID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Render the calibration pattern with an unsaved curve */
+        post: operations["previewToneCurve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/screens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listScreens"];
+        put?: never;
+        /** Create a screen with one full-size region and a starter template */
+        post: operations["createScreen"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/screens/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ScreenID"];
+            };
+            cookie?: never;
+        };
+        get: operations["getScreen"];
+        /** Save a screen; it re-renders shortly after */
+        put: operations["updateScreen"];
+        post?: never;
+        delete: operations["deleteScreen"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/screens/{id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ScreenID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Render a screen, optionally with unsaved templates, without storing it */
+        post: operations["previewScreen"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/screens/{id}/renders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ScreenID"];
+            };
+            cookie?: never;
+        };
+        /** Render history, newest first */
+        get: operations["listScreenRenders"];
+        put?: never;
+        /** Render and store now */
+        post: operations["renderScreen"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/playlists": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listPlaylists"];
+        put?: never;
+        post: operations["createPlaylist"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/playlists/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PlaylistID"];
+            };
+            cookie?: never;
+        };
+        get: operations["getPlaylist"];
+        /** Replace name and items (items keep their id when given) */
+        put: operations["updatePlaylist"];
+        post?: never;
+        delete: operations["deletePlaylist"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -220,6 +406,10 @@ export interface components {
         };
         SystemInfo: {
             version: string;
+            /** @example 3.4.4 */
+            framework_version: string;
+            /** @description Helper functions available in screen templates. */
+            template_functions: string[];
             /** @example Europe/Vienna */
             timezone: string;
             /** @description Base URL devices use to reach the device listener; empty if not configured. */
@@ -227,9 +417,15 @@ export interface components {
         };
         Event: {
             /** @enum {string} */
-            type: "device.created" | "device.updated" | "device.deleted" | "device.seen" | "device.logs";
+            type: "device.created" | "device.updated" | "device.deleted" | "device.seen" | "device.logs" | "screen.updated" | "screen.rendered" | "playlist.updated" | "model.updated";
             /** Format: int64 */
             device_id?: number;
+            /** Format: int64 */
+            screen_id?: number;
+            /** Format: int64 */
+            playlist_id?: number;
+            /** Format: int64 */
+            model_id?: number;
         };
         DeviceModel: {
             /** Format: int64 */
@@ -241,6 +437,7 @@ export interface components {
             height: number;
             /** @enum {integer} */
             bit_depth: 1 | 2 | 4;
+            tone_curve: components["schemas"]["ToneCurve"];
         };
         /** @enum {string} */
         DeviceStatus: "pending" | "active" | "disabled";
@@ -262,8 +459,15 @@ export interface components {
             sleep_start?: string | null;
             /** @example 06:00 */
             sleep_end?: string | null;
-            /** @description Static image assigned to the device; null = placeholder. */
+            /** @description Static image, shown when the device has no playlist; null = placeholder. */
             image_filename?: string | null;
+            /** Format: int64 */
+            playlist_id?: number | null;
+            /**
+             * Format: date-time
+             * @description While in the future, the device shows the gray calibration pattern.
+             */
+            calibrating_until?: string | null;
             firmware_version?: string | null;
             reported_model?: string | null;
             reported_width?: number | null;
@@ -342,6 +546,127 @@ export interface components {
              */
             next_before_id?: number | null;
         };
+        ToneCurve: {
+            /** @example 1 */
+            gamma: number;
+            /** @example 0 */
+            black: number;
+            /** @example 1 */
+            white: number;
+        };
+        Region: {
+            /** Format: int64 */
+            id: number;
+            /** @example main */
+            key: string;
+            x: number;
+            y: number;
+            w: number;
+            h: number;
+            template: string;
+        };
+        Render: {
+            /** Format: int64 */
+            id: number;
+            /** @enum {string} */
+            status: "ok" | "error";
+            filename?: string | null;
+            error?: string | null;
+            /** Format: int64 */
+            duration_ms: number;
+            /** @example edit */
+            trigger: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        ScreenSummary: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            /** Format: int64 */
+            model_id: number;
+            render_interval: number;
+            /** Format: date-time */
+            updated_at: string;
+            latest_render?: components["schemas"]["Render"];
+            /** @description Filename of the newest successful render. */
+            latest_image?: string | null;
+        };
+        Screen: components["schemas"]["ScreenSummary"] & {
+            framework_version: string;
+            /** @description Extra HTML for the page head (styles). */
+            head: string;
+            regions: components["schemas"]["Region"][];
+        };
+        ScreenCreate: {
+            name: string;
+            /** Format: int64 */
+            model_id: number;
+        };
+        ScreenUpdate: {
+            name: string;
+            /** Format: int64 */
+            model_id: number;
+            head: string;
+            render_interval: number;
+            regions: {
+                /** Format: int64 */
+                id: number;
+                template: string;
+            }[];
+        };
+        PreviewRequest: {
+            /** @description Unsaved region templates by region key. */
+            templates?: {
+                [key: string]: string;
+            };
+            head?: string;
+        };
+        TemplateError: {
+            region: string;
+            line: number;
+            column: number;
+            message: string;
+        };
+        Preview: {
+            /** @description data:image/png;base64 URL of the browser screenshot. */
+            raw: string;
+            /** @description data:image/png;base64 URL of the image as the device gets it. */
+            device: string;
+            errors: components["schemas"]["TemplateError"][];
+            /** Format: int64 */
+            duration_ms: number;
+        };
+        TemplateProblem: components["schemas"]["Problem"] & {
+            template_errors?: components["schemas"]["TemplateError"][];
+        };
+        PlaylistItem: {
+            /**
+             * Format: int64
+             * @description Omit for new items.
+             */
+            id?: number;
+            /** Format: int64 */
+            screen_id: number;
+            /** @description Number of device wakes the item stays on screen. */
+            dwell: number;
+            /** @description Seconds between wakes while this item shows; null = the device's own rate. */
+            refresh_rate?: number | null;
+            enabled: boolean;
+        };
+        Playlist: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            items: components["schemas"]["PlaylistItem"][];
+            device_count: number;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        PlaylistInput: {
+            name: string;
+            items: components["schemas"]["PlaylistItem"][];
+        };
         /** @description RFC 9457 problem details. */
         Problem: {
             /** @default about:blank */
@@ -366,6 +691,24 @@ export interface components {
                 "application/json": components["schemas"]["Device"];
             };
         };
+        /** @description The screen */
+        Screen: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Screen"];
+            };
+        };
+        /** @description The playlist */
+        Playlist: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Playlist"];
+            };
+        };
         /** @description Error */
         Problem: {
             headers: {
@@ -378,6 +721,9 @@ export interface components {
     };
     parameters: {
         DeviceID: number;
+        ScreenID: number;
+        PlaylistID: number;
+        ModelID: number;
         Limit: number;
     };
     requestBodies: never;
@@ -679,6 +1025,385 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Telemetry"][];
                 };
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    setDevicePlaylist: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["DeviceID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: int64 */
+                    playlist_id?: number | null;
+                };
+            };
+        };
+        responses: {
+            200: components["responses"]["Device"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    startDeviceCalibration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["DeviceID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["Device"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    stopDeviceCalibration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["DeviceID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["Device"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    setToneCurve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ModelID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ToneCurve"];
+            };
+        };
+        responses: {
+            /** @description The model */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeviceModel"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    previewToneCurve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ModelID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ToneCurve"];
+            };
+        };
+        responses: {
+            /** @description Calibration pattern as the device would get it */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Preview"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    listScreens: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description All screens (without templates) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScreenSummary"][];
+                };
+            };
+        };
+    };
+    createScreen: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScreenCreate"];
+            };
+        };
+        responses: {
+            201: components["responses"]["Screen"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getScreen: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ScreenID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["Screen"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateScreen: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ScreenID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScreenUpdate"];
+            };
+        };
+        responses: {
+            200: components["responses"]["Screen"];
+            404: components["responses"]["Problem"];
+            /** @description Invalid input or template syntax errors */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["TemplateProblem"];
+                };
+            };
+        };
+    };
+    deleteScreen: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ScreenID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    previewScreen: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ScreenID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description The browser render and the device image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Preview"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    listScreenRenders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ScreenID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Renders */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Render"][];
+                };
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    renderScreen: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ScreenID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The new render */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Render"];
+                };
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    listPlaylists: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description All playlists */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Playlist"][];
+                };
+            };
+        };
+    };
+    createPlaylist: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlaylistInput"];
+            };
+        };
+        responses: {
+            201: components["responses"]["Playlist"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getPlaylist: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PlaylistID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["Playlist"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updatePlaylist: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PlaylistID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlaylistInput"];
+            };
+        };
+        responses: {
+            200: components["responses"]["Playlist"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    deletePlaylist: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PlaylistID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             404: components["responses"]["Problem"];
         };

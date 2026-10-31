@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"mime/multipart"
 	"net/http"
 	"net/url"
@@ -69,11 +70,15 @@ func (e DeviceStatus) Valid() bool {
 
 // Defines values for EventType.
 const (
-	DeviceCreated EventType = "device.created"
-	DeviceDeleted EventType = "device.deleted"
-	DeviceLogs    EventType = "device.logs"
-	DeviceSeen    EventType = "device.seen"
-	DeviceUpdated EventType = "device.updated"
+	DeviceCreated   EventType = "device.created"
+	DeviceDeleted   EventType = "device.deleted"
+	DeviceLogs      EventType = "device.logs"
+	DeviceSeen      EventType = "device.seen"
+	DeviceUpdated   EventType = "device.updated"
+	ModelUpdated    EventType = "model.updated"
+	PlaylistUpdated EventType = "playlist.updated"
+	ScreenRendered  EventType = "screen.rendered"
+	ScreenUpdated   EventType = "screen.updated"
 )
 
 // Valid indicates whether the value is a known member of the EventType enum.
@@ -88,6 +93,14 @@ func (e EventType) Valid() bool {
 	case DeviceSeen:
 		return true
 	case DeviceUpdated:
+		return true
+	case ModelUpdated:
+		return true
+	case PlaylistUpdated:
+		return true
+	case ScreenRendered:
+		return true
+	case ScreenUpdated:
 		return true
 	default:
 		return false
@@ -166,26 +179,48 @@ func (e ImageFit) Valid() bool {
 	}
 }
 
+// Defines values for RenderStatus.
+const (
+	RenderStatusError RenderStatus = "error"
+	RenderStatusOk    RenderStatus = "ok"
+)
+
+// Valid indicates whether the value is a known member of the RenderStatus enum.
+func (e RenderStatus) Valid() bool {
+	switch e {
+	case RenderStatusError:
+		return true
+	case RenderStatusOk:
+		return true
+	default:
+		return false
+	}
+}
+
 // Device defines model for Device.
 type Device struct {
-	ApiKey          string     `json:"api_key"`
-	ApprovedAt      *time.Time `json:"approved_at,omitempty"`
-	CreatedAt       time.Time  `json:"created_at"`
-	FirmwareVersion *string    `json:"firmware_version,omitempty"`
+	ApiKey     string     `json:"api_key"`
+	ApprovedAt *time.Time `json:"approved_at,omitempty"`
+
+	// CalibratingUntil While in the future, the device shows the gray calibration pattern.
+	CalibratingUntil *time.Time `json:"calibrating_until,omitempty"`
+	CreatedAt        time.Time  `json:"created_at"`
+	FirmwareVersion  *string    `json:"firmware_version,omitempty"`
 
 	// FriendlyId Example: K7Q2XM
 	FriendlyId string `json:"friendly_id"`
 	Id         int64  `json:"id"`
 
-	// ImageFilename Static image assigned to the device; null = placeholder.
+	// ImageFilename Static image, shown when the device has no playlist; null = placeholder.
 	ImageFilename *string    `json:"image_filename,omitempty"`
 	Label         string     `json:"label"`
 	LastSeenAt    *time.Time `json:"last_seen_at,omitempty"`
 	Latest        *Telemetry `json:"latest,omitempty"`
 
 	// Mac Example: AA:BB:CC:DD:EE:FF
-	Mac     string `json:"mac"`
-	ModelId *int64 `json:"model_id,omitempty"`
+	Mac        string `json:"mac"`
+	ModelId    *int64 `json:"model_id,omitempty"`
+	PlaylistId *int64 `json:"playlist_id,omitempty"`
 
 	// RefreshRate Seconds between wakes.
 	RefreshRate    int     `json:"refresh_rate"`
@@ -231,6 +266,7 @@ type DeviceModel struct {
 	Id            int64               `json:"id"`
 	Key           string              `json:"key"`
 	Name          string              `json:"name"`
+	ToneCurve     ToneCurve           `json:"tone_curve"`
 	Width         int                 `json:"width"`
 }
 
@@ -255,8 +291,11 @@ type DeviceUpdate struct {
 
 // Event defines model for Event.
 type Event struct {
-	DeviceId *int64    `json:"device_id,omitempty"`
-	Type     EventType `json:"type"`
+	DeviceId   *int64    `json:"device_id,omitempty"`
+	ModelId    *int64    `json:"model_id,omitempty"`
+	PlaylistId *int64    `json:"playlist_id,omitempty"`
+	ScreenId   *int64    `json:"screen_id,omitempty"`
+	Type       EventType `json:"type"`
 }
 
 // EventType defines model for Event.Type.
@@ -289,6 +328,54 @@ type ImageDither string
 // ImageFit defines model for ImageFit.
 type ImageFit string
 
+// Playlist defines model for Playlist.
+type Playlist struct {
+	DeviceCount int            `json:"device_count"`
+	Id          int64          `json:"id"`
+	Items       []PlaylistItem `json:"items"`
+	Name        string         `json:"name"`
+	UpdatedAt   time.Time      `json:"updated_at"`
+}
+
+// PlaylistInput defines model for PlaylistInput.
+type PlaylistInput struct {
+	Items []PlaylistItem `json:"items"`
+	Name  string         `json:"name"`
+}
+
+// PlaylistItem defines model for PlaylistItem.
+type PlaylistItem struct {
+	// Dwell Number of device wakes the item stays on screen.
+	Dwell   int  `json:"dwell"`
+	Enabled bool `json:"enabled"`
+
+	// Id Omit for new items.
+	Id *int64 `json:"id,omitempty"`
+
+	// RefreshRate Seconds between wakes while this item shows; null = the device's own rate.
+	RefreshRate *int  `json:"refresh_rate,omitempty"`
+	ScreenId    int64 `json:"screen_id"`
+}
+
+// Preview defines model for Preview.
+type Preview struct {
+	// Device data:image/png;base64 URL of the image as the device gets it.
+	Device     string          `json:"device"`
+	DurationMs int64           `json:"duration_ms"`
+	Errors     []TemplateError `json:"errors"`
+
+	// Raw data:image/png;base64 URL of the browser screenshot.
+	Raw string `json:"raw"`
+}
+
+// PreviewRequest defines model for PreviewRequest.
+type PreviewRequest struct {
+	Head *string `json:"head,omitempty"`
+
+	// Templates Unsaved region templates by region key.
+	Templates *map[string]string `json:"templates,omitempty"`
+}
+
 // Problem RFC 9457 problem details.
 type Problem struct {
 	Detail *string       `json:"detail,omitempty"`
@@ -298,10 +385,94 @@ type Problem struct {
 	Type   *string       `json:"type,omitempty"`
 }
 
+// Region defines model for Region.
+type Region struct {
+	H  int   `json:"h"`
+	Id int64 `json:"id"`
+
+	// Key Example: main
+	Key      string `json:"key"`
+	Template string `json:"template"`
+	W        int    `json:"w"`
+	X        int    `json:"x"`
+	Y        int    `json:"y"`
+}
+
+// Render defines model for Render.
+type Render struct {
+	CreatedAt  time.Time    `json:"created_at"`
+	DurationMs int64        `json:"duration_ms"`
+	Error      *string      `json:"error,omitempty"`
+	Filename   *string      `json:"filename,omitempty"`
+	Id         int64        `json:"id"`
+	Status     RenderStatus `json:"status"`
+
+	// Trigger Example: edit
+	Trigger string `json:"trigger"`
+}
+
+// RenderStatus defines model for Render.Status.
+type RenderStatus string
+
+// Screen defines model for Screen.
+type Screen struct {
+	FrameworkVersion string `json:"framework_version"`
+
+	// Head Extra HTML for the page head (styles).
+	Head string `json:"head"`
+	Id   int64  `json:"id"`
+
+	// LatestImage Filename of the newest successful render.
+	LatestImage    *string   `json:"latest_image,omitempty"`
+	LatestRender   *Render   `json:"latest_render,omitempty"`
+	ModelId        int64     `json:"model_id"`
+	Name           string    `json:"name"`
+	Regions        []Region  `json:"regions"`
+	RenderInterval int       `json:"render_interval"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+// ScreenCreate defines model for ScreenCreate.
+type ScreenCreate struct {
+	ModelId int64  `json:"model_id"`
+	Name    string `json:"name"`
+}
+
+// ScreenSummary defines model for ScreenSummary.
+type ScreenSummary struct {
+	Id int64 `json:"id"`
+
+	// LatestImage Filename of the newest successful render.
+	LatestImage    *string   `json:"latest_image,omitempty"`
+	LatestRender   *Render   `json:"latest_render,omitempty"`
+	ModelId        int64     `json:"model_id"`
+	Name           string    `json:"name"`
+	RenderInterval int       `json:"render_interval"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+// ScreenUpdate defines model for ScreenUpdate.
+type ScreenUpdate struct {
+	Head    string `json:"head"`
+	ModelId int64  `json:"model_id"`
+	Name    string `json:"name"`
+	Regions []struct {
+		Id       int64  `json:"id"`
+		Template string `json:"template"`
+	} `json:"regions"`
+	RenderInterval int `json:"render_interval"`
+}
+
 // SystemInfo defines model for SystemInfo.
 type SystemInfo struct {
 	// DevicePublicUrl Base URL devices use to reach the device listener; empty if not configured.
 	DevicePublicUrl string `json:"device_public_url"`
+
+	// FrameworkVersion Example: 3.4.4
+	FrameworkVersion string `json:"framework_version"`
+
+	// TemplateFunctions Helper functions available in screen templates.
+	TemplateFunctions []string `json:"template_functions"`
 
 	// Timezone Example: Europe/Vienna
 	Timezone string `json:"timezone"`
@@ -325,11 +496,50 @@ type Telemetry struct {
 	WakeTime        *int               `json:"wake_time,omitempty"`
 }
 
+// TemplateError defines model for TemplateError.
+type TemplateError struct {
+	Column  int    `json:"column"`
+	Line    int    `json:"line"`
+	Message string `json:"message"`
+	Region  string `json:"region"`
+}
+
+// TemplateProblem defines model for TemplateProblem.
+type TemplateProblem struct {
+	Detail         *string          `json:"detail,omitempty"`
+	Errors         *[]FieldError    `json:"errors,omitempty"`
+	Status         int              `json:"status"`
+	TemplateErrors *[]TemplateError `json:"template_errors,omitempty"`
+	Title          string           `json:"title"`
+	Type           *string          `json:"type,omitempty"`
+}
+
+// ToneCurve defines model for ToneCurve.
+type ToneCurve struct {
+	// Black Example: 0
+	Black float32 `json:"black"`
+
+	// Gamma Example: 1
+	Gamma float32 `json:"gamma"`
+
+	// White Example: 1
+	White float32 `json:"white"`
+}
+
 // DeviceID defines model for DeviceID.
 type DeviceID = int64
 
 // Limit defines model for Limit.
 type Limit = int
+
+// ModelID defines model for ModelID.
+type ModelID = int64
+
+// PlaylistID defines model for PlaylistID.
+type PlaylistID = int64
+
+// ScreenID defines model for ScreenID.
+type ScreenID = int64
 
 // SetDeviceImageMultipartBody defines parameters for SetDeviceImage.
 type SetDeviceImageMultipartBody struct {
@@ -354,11 +564,22 @@ type ListDeviceLogsParams struct {
 	Limit *Limit  `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// SetDevicePlaylistJSONBody defines parameters for SetDevicePlaylist.
+type SetDevicePlaylistJSONBody struct {
+	PlaylistId *int64 `json:"playlist_id,omitempty"`
+}
+
 // ListDeviceTelemetryParams defines parameters for ListDeviceTelemetry.
 type ListDeviceTelemetryParams struct {
 	BeforeId *int64 `form:"before_id,omitempty" json:"before_id,omitempty"`
 	Limit    *Limit `form:"limit,omitempty" json:"limit,omitempty"`
 }
+
+// SetToneCurveJSONRequestBody defines body for SetToneCurve for application/json ContentType.
+type SetToneCurveJSONRequestBody = ToneCurve
+
+// PreviewToneCurveJSONRequestBody defines body for PreviewToneCurve for application/json ContentType.
+type PreviewToneCurveJSONRequestBody = ToneCurve
 
 // UpdateDeviceJSONRequestBody defines body for UpdateDevice for application/json ContentType.
 type UpdateDeviceJSONRequestBody = DeviceUpdate
@@ -366,11 +587,35 @@ type UpdateDeviceJSONRequestBody = DeviceUpdate
 // SetDeviceImageMultipartRequestBody defines body for SetDeviceImage for multipart/form-data ContentType.
 type SetDeviceImageMultipartRequestBody SetDeviceImageMultipartBody
 
+// SetDevicePlaylistJSONRequestBody defines body for SetDevicePlaylist for application/json ContentType.
+type SetDevicePlaylistJSONRequestBody SetDevicePlaylistJSONBody
+
+// CreatePlaylistJSONRequestBody defines body for CreatePlaylist for application/json ContentType.
+type CreatePlaylistJSONRequestBody = PlaylistInput
+
+// UpdatePlaylistJSONRequestBody defines body for UpdatePlaylist for application/json ContentType.
+type UpdatePlaylistJSONRequestBody = PlaylistInput
+
+// CreateScreenJSONRequestBody defines body for CreateScreen for application/json ContentType.
+type CreateScreenJSONRequestBody = ScreenCreate
+
+// UpdateScreenJSONRequestBody defines body for UpdateScreen for application/json ContentType.
+type UpdateScreenJSONRequestBody = ScreenUpdate
+
+// PreviewScreenJSONRequestBody defines body for PreviewScreen for application/json ContentType.
+type PreviewScreenJSONRequestBody = PreviewRequest
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 
 	// (GET /device-models)
 	ListDeviceModels(w http.ResponseWriter, r *http.Request)
+	// SetToneCurve Save a model's gray tone curve; its screens re-render
+	// (PUT /device-models/{id}/tone-curve)
+	SetToneCurve(w http.ResponseWriter, r *http.Request, id ModelID)
+	// PreviewToneCurve Render the calibration pattern with an unsaved curve
+	// (POST /device-models/{id}/tone-curve/preview)
+	PreviewToneCurve(w http.ResponseWriter, r *http.Request, id ModelID)
 	// ListDevices All devices, pending first
 	// (GET /devices)
 	ListDevices(w http.ResponseWriter, r *http.Request)
@@ -387,6 +632,12 @@ type ServerInterface interface {
 	// (POST /devices/{id}/approve)
 	ApproveDevice(w http.ResponseWriter, r *http.Request, id DeviceID)
 
+	// (DELETE /devices/{id}/calibration)
+	StopDeviceCalibration(w http.ResponseWriter, r *http.Request, id DeviceID)
+	// StartDeviceCalibration Show the gray calibration pattern on the device for 30 minutes
+	// (POST /devices/{id}/calibration)
+	StartDeviceCalibration(w http.ResponseWriter, r *http.Request, id DeviceID)
+
 	// (POST /devices/{id}/disable)
 	DisableDevice(w http.ResponseWriter, r *http.Request, id DeviceID)
 
@@ -398,12 +649,54 @@ type ServerInterface interface {
 	// ListDeviceLogs Device logs, newest first
 	// (GET /devices/{id}/logs)
 	ListDeviceLogs(w http.ResponseWriter, r *http.Request, id DeviceID, params ListDeviceLogsParams)
+	// SetDevicePlaylist Assign a playlist (or none) and restart the rotation
+	// (PUT /devices/{id}/playlist)
+	SetDevicePlaylist(w http.ResponseWriter, r *http.Request, id DeviceID)
 	// ListDeviceTelemetry Telemetry history, newest first
 	// (GET /devices/{id}/telemetry)
 	ListDeviceTelemetry(w http.ResponseWriter, r *http.Request, id DeviceID, params ListDeviceTelemetryParams)
 	// GetHealth Liveness and dependency status
 	// (GET /health)
 	GetHealth(w http.ResponseWriter, r *http.Request)
+
+	// (GET /playlists)
+	ListPlaylists(w http.ResponseWriter, r *http.Request)
+
+	// (POST /playlists)
+	CreatePlaylist(w http.ResponseWriter, r *http.Request)
+
+	// (DELETE /playlists/{id})
+	DeletePlaylist(w http.ResponseWriter, r *http.Request, id PlaylistID)
+
+	// (GET /playlists/{id})
+	GetPlaylist(w http.ResponseWriter, r *http.Request, id PlaylistID)
+	// UpdatePlaylist Replace name and items (items keep their id when given)
+	// (PUT /playlists/{id})
+	UpdatePlaylist(w http.ResponseWriter, r *http.Request, id PlaylistID)
+
+	// (GET /screens)
+	ListScreens(w http.ResponseWriter, r *http.Request)
+	// CreateScreen Create a screen with one full-size region and a starter template
+	// (POST /screens)
+	CreateScreen(w http.ResponseWriter, r *http.Request)
+
+	// (DELETE /screens/{id})
+	DeleteScreen(w http.ResponseWriter, r *http.Request, id ScreenID)
+
+	// (GET /screens/{id})
+	GetScreen(w http.ResponseWriter, r *http.Request, id ScreenID)
+	// UpdateScreen Save a screen; it re-renders shortly after
+	// (PUT /screens/{id})
+	UpdateScreen(w http.ResponseWriter, r *http.Request, id ScreenID)
+	// PreviewScreen Render a screen, optionally with unsaved templates, without storing it
+	// (POST /screens/{id}/preview)
+	PreviewScreen(w http.ResponseWriter, r *http.Request, id ScreenID)
+	// ListScreenRenders Render history, newest first
+	// (GET /screens/{id}/renders)
+	ListScreenRenders(w http.ResponseWriter, r *http.Request, id ScreenID)
+	// RenderScreen Render and store now
+	// (POST /screens/{id}/renders)
+	RenderScreen(w http.ResponseWriter, r *http.Request, id ScreenID)
 	// GetSystem Server information the dashboard needs
 	// (GET /system)
 	GetSystem(w http.ResponseWriter, r *http.Request)
@@ -423,6 +716,58 @@ func (siw *ServerInterfaceWrapper) ListDeviceModels(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListDeviceModels(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetToneCurve operation middleware
+func (siw *ServerInterfaceWrapper) SetToneCurve(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ModelID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetToneCurve(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PreviewToneCurve operation middleware
+func (siw *ServerInterfaceWrapper) PreviewToneCurve(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ModelID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PreviewToneCurve(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -541,6 +886,58 @@ func (siw *ServerInterfaceWrapper) ApproveDevice(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ApproveDevice(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StopDeviceCalibration operation middleware
+func (siw *ServerInterfaceWrapper) StopDeviceCalibration(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id DeviceID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StopDeviceCalibration(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StartDeviceCalibration operation middleware
+func (siw *ServerInterfaceWrapper) StartDeviceCalibration(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id DeviceID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StartDeviceCalibration(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -722,6 +1119,32 @@ func (siw *ServerInterfaceWrapper) ListDeviceLogs(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// SetDevicePlaylist operation middleware
+func (siw *ServerInterfaceWrapper) SetDevicePlaylist(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id DeviceID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetDevicePlaylist(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListDeviceTelemetry operation middleware
 func (siw *ServerInterfaceWrapper) ListDeviceTelemetry(w http.ResponseWriter, r *http.Request) {
 
@@ -782,6 +1205,296 @@ func (siw *ServerInterfaceWrapper) GetHealth(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetHealth(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListPlaylists operation middleware
+func (siw *ServerInterfaceWrapper) ListPlaylists(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListPlaylists(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreatePlaylist operation middleware
+func (siw *ServerInterfaceWrapper) CreatePlaylist(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreatePlaylist(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeletePlaylist operation middleware
+func (siw *ServerInterfaceWrapper) DeletePlaylist(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id PlaylistID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeletePlaylist(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetPlaylist operation middleware
+func (siw *ServerInterfaceWrapper) GetPlaylist(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id PlaylistID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetPlaylist(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdatePlaylist operation middleware
+func (siw *ServerInterfaceWrapper) UpdatePlaylist(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id PlaylistID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdatePlaylist(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListScreens operation middleware
+func (siw *ServerInterfaceWrapper) ListScreens(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListScreens(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateScreen operation middleware
+func (siw *ServerInterfaceWrapper) CreateScreen(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateScreen(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteScreen operation middleware
+func (siw *ServerInterfaceWrapper) DeleteScreen(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ScreenID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteScreen(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetScreen operation middleware
+func (siw *ServerInterfaceWrapper) GetScreen(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ScreenID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetScreen(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateScreen operation middleware
+func (siw *ServerInterfaceWrapper) UpdateScreen(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ScreenID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateScreen(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PreviewScreen operation middleware
+func (siw *ServerInterfaceWrapper) PreviewScreen(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ScreenID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PreviewScreen(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListScreenRenders operation middleware
+func (siw *ServerInterfaceWrapper) ListScreenRenders(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ScreenID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListScreenRenders(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RenderScreen operation middleware
+func (siw *ServerInterfaceWrapper) RenderScreen(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ScreenID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RenderScreen(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -938,13 +1651,35 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/devices/{id}/image", wrapper.SetDeviceImage)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/devices/{id}/logs", wrapper.ListDeviceLogs)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/devices/{id}/telemetry", wrapper.ListDeviceTelemetry)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/devices/{id}/playlist", wrapper.SetDevicePlaylist)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/devices/{id}/calibration", wrapper.StopDeviceCalibration)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/devices/{id}/calibration", wrapper.StartDeviceCalibration)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/device-models/{id}/tone-curve", wrapper.SetToneCurve)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/device-models/{id}/tone-curve/preview", wrapper.PreviewToneCurve)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/screens", wrapper.ListScreens)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/screens", wrapper.CreateScreen)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/screens/{id}", wrapper.DeleteScreen)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/screens/{id}", wrapper.GetScreen)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/screens/{id}", wrapper.UpdateScreen)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/screens/{id}/preview", wrapper.PreviewScreen)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/screens/{id}/renders", wrapper.ListScreenRenders)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/screens/{id}/renders", wrapper.RenderScreen)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/playlists", wrapper.ListPlaylists)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/playlists", wrapper.CreatePlaylist)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/playlists/{id}", wrapper.DeletePlaylist)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/playlists/{id}", wrapper.GetPlaylist)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/playlists/{id}", wrapper.UpdatePlaylist)
 
 	return m
 }
 
 type DeviceJSONResponse Device
 
+type PlaylistJSONResponse Playlist
+
 type ProblemApplicationProblemPlusJSONResponse Problem
+
+type ScreenJSONResponse Screen
 
 type ListDeviceModelsRequestObject struct {
 }
@@ -963,6 +1698,126 @@ func (response ListDeviceModels200JSONResponse) VisitListDeviceModelsResponse(w 
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetToneCurveRequestObject struct {
+	Id   ModelID `json:"id"`
+	Body *SetToneCurveJSONRequestBody
+}
+
+type SetToneCurveResponseObject interface {
+	VisitSetToneCurveResponse(w http.ResponseWriter) error
+}
+
+type SetToneCurve200JSONResponse DeviceModel
+
+func (response SetToneCurve200JSONResponse) VisitSetToneCurveResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetToneCurve404ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response SetToneCurve404ApplicationProblemPlusJSONResponse) VisitSetToneCurveResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetToneCurve422ApplicationProblemPlusJSONResponse Problem
+
+func (response SetToneCurve422ApplicationProblemPlusJSONResponse) VisitSetToneCurveResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewToneCurveRequestObject struct {
+	Id   ModelID `json:"id"`
+	Body *PreviewToneCurveJSONRequestBody
+}
+
+type PreviewToneCurveResponseObject interface {
+	VisitPreviewToneCurveResponse(w http.ResponseWriter) error
+}
+
+type PreviewToneCurve200JSONResponse Preview
+
+func (response PreviewToneCurve200JSONResponse) VisitPreviewToneCurveResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewToneCurve404ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response PreviewToneCurve404ApplicationProblemPlusJSONResponse) VisitPreviewToneCurveResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewToneCurve422ApplicationProblemPlusJSONResponse Problem
+
+func (response PreviewToneCurve422ApplicationProblemPlusJSONResponse) VisitPreviewToneCurveResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewToneCurve503ApplicationProblemPlusJSONResponse Problem
+
+func (response PreviewToneCurve503ApplicationProblemPlusJSONResponse) VisitPreviewToneCurveResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -1163,6 +2018,96 @@ func (response ApproveDevice422ApplicationProblemPlusJSONResponse) VisitApproveD
 	return err
 }
 
+type StopDeviceCalibrationRequestObject struct {
+	Id DeviceID `json:"id"`
+}
+
+type StopDeviceCalibrationResponseObject interface {
+	VisitStopDeviceCalibrationResponse(w http.ResponseWriter) error
+}
+
+type StopDeviceCalibration200JSONResponse struct{ DeviceJSONResponse }
+
+func (response StopDeviceCalibration200JSONResponse) VisitStopDeviceCalibrationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StopDeviceCalibration404ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response StopDeviceCalibration404ApplicationProblemPlusJSONResponse) VisitStopDeviceCalibrationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartDeviceCalibrationRequestObject struct {
+	Id DeviceID `json:"id"`
+}
+
+type StartDeviceCalibrationResponseObject interface {
+	VisitStartDeviceCalibrationResponse(w http.ResponseWriter) error
+}
+
+type StartDeviceCalibration200JSONResponse struct{ DeviceJSONResponse }
+
+func (response StartDeviceCalibration200JSONResponse) VisitStartDeviceCalibrationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartDeviceCalibration404ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response StartDeviceCalibration404ApplicationProblemPlusJSONResponse) VisitStartDeviceCalibrationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartDeviceCalibration422ApplicationProblemPlusJSONResponse Problem
+
+func (response StartDeviceCalibration422ApplicationProblemPlusJSONResponse) VisitStartDeviceCalibrationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type DisableDeviceRequestObject struct {
 	Id DeviceID `json:"id"`
 }
@@ -1331,6 +2276,59 @@ func (response ListDeviceLogs404ApplicationProblemPlusJSONResponse) VisitListDev
 	return err
 }
 
+type SetDevicePlaylistRequestObject struct {
+	Id   DeviceID `json:"id"`
+	Body *SetDevicePlaylistJSONRequestBody
+}
+
+type SetDevicePlaylistResponseObject interface {
+	VisitSetDevicePlaylistResponse(w http.ResponseWriter) error
+}
+
+type SetDevicePlaylist200JSONResponse struct{ DeviceJSONResponse }
+
+func (response SetDevicePlaylist200JSONResponse) VisitSetDevicePlaylistResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetDevicePlaylist404ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response SetDevicePlaylist404ApplicationProblemPlusJSONResponse) VisitSetDevicePlaylistResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetDevicePlaylist422ApplicationProblemPlusJSONResponse Problem
+
+func (response SetDevicePlaylist422ApplicationProblemPlusJSONResponse) VisitSetDevicePlaylistResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListDeviceTelemetryRequestObject struct {
 	Id     DeviceID `json:"id"`
 	Params ListDeviceTelemetryParams
@@ -1405,6 +2403,499 @@ func (response GetHealth503JSONResponse) VisitGetHealthResponse(w http.ResponseW
 	return err
 }
 
+type ListPlaylistsRequestObject struct {
+}
+
+type ListPlaylistsResponseObject interface {
+	VisitListPlaylistsResponse(w http.ResponseWriter) error
+}
+
+type ListPlaylists200JSONResponse []Playlist
+
+func (response ListPlaylists200JSONResponse) VisitListPlaylistsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePlaylistRequestObject struct {
+	Body *CreatePlaylistJSONRequestBody
+}
+
+type CreatePlaylistResponseObject interface {
+	VisitCreatePlaylistResponse(w http.ResponseWriter) error
+}
+
+type CreatePlaylist201JSONResponse struct{ PlaylistJSONResponse }
+
+func (response CreatePlaylist201JSONResponse) VisitCreatePlaylistResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePlaylist422ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response CreatePlaylist422ApplicationProblemPlusJSONResponse) VisitCreatePlaylistResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeletePlaylistRequestObject struct {
+	Id PlaylistID `json:"id"`
+}
+
+type DeletePlaylistResponseObject interface {
+	VisitDeletePlaylistResponse(w http.ResponseWriter) error
+}
+
+type DeletePlaylist204Response struct {
+}
+
+func (response DeletePlaylist204Response) VisitDeletePlaylistResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeletePlaylist404ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response DeletePlaylist404ApplicationProblemPlusJSONResponse) VisitDeletePlaylistResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPlaylistRequestObject struct {
+	Id PlaylistID `json:"id"`
+}
+
+type GetPlaylistResponseObject interface {
+	VisitGetPlaylistResponse(w http.ResponseWriter) error
+}
+
+type GetPlaylist200JSONResponse struct{ PlaylistJSONResponse }
+
+func (response GetPlaylist200JSONResponse) VisitGetPlaylistResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPlaylist404ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetPlaylist404ApplicationProblemPlusJSONResponse) VisitGetPlaylistResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdatePlaylistRequestObject struct {
+	Id   PlaylistID `json:"id"`
+	Body *UpdatePlaylistJSONRequestBody
+}
+
+type UpdatePlaylistResponseObject interface {
+	VisitUpdatePlaylistResponse(w http.ResponseWriter) error
+}
+
+type UpdatePlaylist200JSONResponse struct{ PlaylistJSONResponse }
+
+func (response UpdatePlaylist200JSONResponse) VisitUpdatePlaylistResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdatePlaylist404ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response UpdatePlaylist404ApplicationProblemPlusJSONResponse) VisitUpdatePlaylistResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdatePlaylist422ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdatePlaylist422ApplicationProblemPlusJSONResponse) VisitUpdatePlaylistResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListScreensRequestObject struct {
+}
+
+type ListScreensResponseObject interface {
+	VisitListScreensResponse(w http.ResponseWriter) error
+}
+
+type ListScreens200JSONResponse []ScreenSummary
+
+func (response ListScreens200JSONResponse) VisitListScreensResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateScreenRequestObject struct {
+	Body *CreateScreenJSONRequestBody
+}
+
+type CreateScreenResponseObject interface {
+	VisitCreateScreenResponse(w http.ResponseWriter) error
+}
+
+type CreateScreen201JSONResponse struct{ ScreenJSONResponse }
+
+func (response CreateScreen201JSONResponse) VisitCreateScreenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateScreen422ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response CreateScreen422ApplicationProblemPlusJSONResponse) VisitCreateScreenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteScreenRequestObject struct {
+	Id ScreenID `json:"id"`
+}
+
+type DeleteScreenResponseObject interface {
+	VisitDeleteScreenResponse(w http.ResponseWriter) error
+}
+
+type DeleteScreen204Response struct {
+}
+
+func (response DeleteScreen204Response) VisitDeleteScreenResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteScreen404ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteScreen404ApplicationProblemPlusJSONResponse) VisitDeleteScreenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetScreenRequestObject struct {
+	Id ScreenID `json:"id"`
+}
+
+type GetScreenResponseObject interface {
+	VisitGetScreenResponse(w http.ResponseWriter) error
+}
+
+type GetScreen200JSONResponse struct{ ScreenJSONResponse }
+
+func (response GetScreen200JSONResponse) VisitGetScreenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetScreen404ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetScreen404ApplicationProblemPlusJSONResponse) VisitGetScreenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateScreenRequestObject struct {
+	Id   ScreenID `json:"id"`
+	Body *UpdateScreenJSONRequestBody
+}
+
+type UpdateScreenResponseObject interface {
+	VisitUpdateScreenResponse(w http.ResponseWriter) error
+}
+
+type UpdateScreen200JSONResponse struct{ ScreenJSONResponse }
+
+func (response UpdateScreen200JSONResponse) VisitUpdateScreenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateScreen404ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateScreen404ApplicationProblemPlusJSONResponse) VisitUpdateScreenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateScreen422ApplicationProblemPlusJSONResponse TemplateProblem
+
+func (response UpdateScreen422ApplicationProblemPlusJSONResponse) VisitUpdateScreenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewScreenRequestObject struct {
+	Id   ScreenID `json:"id"`
+	Body *PreviewScreenJSONRequestBody
+}
+
+type PreviewScreenResponseObject interface {
+	VisitPreviewScreenResponse(w http.ResponseWriter) error
+}
+
+type PreviewScreen200JSONResponse Preview
+
+func (response PreviewScreen200JSONResponse) VisitPreviewScreenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewScreen404ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response PreviewScreen404ApplicationProblemPlusJSONResponse) VisitPreviewScreenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewScreen503ApplicationProblemPlusJSONResponse Problem
+
+func (response PreviewScreen503ApplicationProblemPlusJSONResponse) VisitPreviewScreenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListScreenRendersRequestObject struct {
+	Id ScreenID `json:"id"`
+}
+
+type ListScreenRendersResponseObject interface {
+	VisitListScreenRendersResponse(w http.ResponseWriter) error
+}
+
+type ListScreenRenders200JSONResponse []Render
+
+func (response ListScreenRenders200JSONResponse) VisitListScreenRendersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListScreenRenders404ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListScreenRenders404ApplicationProblemPlusJSONResponse) VisitListScreenRendersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RenderScreenRequestObject struct {
+	Id ScreenID `json:"id"`
+}
+
+type RenderScreenResponseObject interface {
+	VisitRenderScreenResponse(w http.ResponseWriter) error
+}
+
+type RenderScreen200JSONResponse Render
+
+func (response RenderScreen200JSONResponse) VisitRenderScreenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RenderScreen404ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response RenderScreen404ApplicationProblemPlusJSONResponse) VisitRenderScreenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetSystemRequestObject struct {
 }
 
@@ -1431,6 +2922,12 @@ type StrictServerInterface interface {
 
 	// (GET /device-models)
 	ListDeviceModels(ctx context.Context, request ListDeviceModelsRequestObject) (ListDeviceModelsResponseObject, error)
+	// SetToneCurve Save a model's gray tone curve; its screens re-render
+	// (PUT /device-models/{id}/tone-curve)
+	SetToneCurve(ctx context.Context, request SetToneCurveRequestObject) (SetToneCurveResponseObject, error)
+	// PreviewToneCurve Render the calibration pattern with an unsaved curve
+	// (POST /device-models/{id}/tone-curve/preview)
+	PreviewToneCurve(ctx context.Context, request PreviewToneCurveRequestObject) (PreviewToneCurveResponseObject, error)
 	// ListDevices All devices, pending first
 	// (GET /devices)
 	ListDevices(ctx context.Context, request ListDevicesRequestObject) (ListDevicesResponseObject, error)
@@ -1447,6 +2944,12 @@ type StrictServerInterface interface {
 	// (POST /devices/{id}/approve)
 	ApproveDevice(ctx context.Context, request ApproveDeviceRequestObject) (ApproveDeviceResponseObject, error)
 
+	// (DELETE /devices/{id}/calibration)
+	StopDeviceCalibration(ctx context.Context, request StopDeviceCalibrationRequestObject) (StopDeviceCalibrationResponseObject, error)
+	// StartDeviceCalibration Show the gray calibration pattern on the device for 30 minutes
+	// (POST /devices/{id}/calibration)
+	StartDeviceCalibration(ctx context.Context, request StartDeviceCalibrationRequestObject) (StartDeviceCalibrationResponseObject, error)
+
 	// (POST /devices/{id}/disable)
 	DisableDevice(ctx context.Context, request DisableDeviceRequestObject) (DisableDeviceResponseObject, error)
 
@@ -1458,12 +2961,54 @@ type StrictServerInterface interface {
 	// ListDeviceLogs Device logs, newest first
 	// (GET /devices/{id}/logs)
 	ListDeviceLogs(ctx context.Context, request ListDeviceLogsRequestObject) (ListDeviceLogsResponseObject, error)
+	// SetDevicePlaylist Assign a playlist (or none) and restart the rotation
+	// (PUT /devices/{id}/playlist)
+	SetDevicePlaylist(ctx context.Context, request SetDevicePlaylistRequestObject) (SetDevicePlaylistResponseObject, error)
 	// ListDeviceTelemetry Telemetry history, newest first
 	// (GET /devices/{id}/telemetry)
 	ListDeviceTelemetry(ctx context.Context, request ListDeviceTelemetryRequestObject) (ListDeviceTelemetryResponseObject, error)
 	// GetHealth Liveness and dependency status
 	// (GET /health)
 	GetHealth(ctx context.Context, request GetHealthRequestObject) (GetHealthResponseObject, error)
+
+	// (GET /playlists)
+	ListPlaylists(ctx context.Context, request ListPlaylistsRequestObject) (ListPlaylistsResponseObject, error)
+
+	// (POST /playlists)
+	CreatePlaylist(ctx context.Context, request CreatePlaylistRequestObject) (CreatePlaylistResponseObject, error)
+
+	// (DELETE /playlists/{id})
+	DeletePlaylist(ctx context.Context, request DeletePlaylistRequestObject) (DeletePlaylistResponseObject, error)
+
+	// (GET /playlists/{id})
+	GetPlaylist(ctx context.Context, request GetPlaylistRequestObject) (GetPlaylistResponseObject, error)
+	// UpdatePlaylist Replace name and items (items keep their id when given)
+	// (PUT /playlists/{id})
+	UpdatePlaylist(ctx context.Context, request UpdatePlaylistRequestObject) (UpdatePlaylistResponseObject, error)
+
+	// (GET /screens)
+	ListScreens(ctx context.Context, request ListScreensRequestObject) (ListScreensResponseObject, error)
+	// CreateScreen Create a screen with one full-size region and a starter template
+	// (POST /screens)
+	CreateScreen(ctx context.Context, request CreateScreenRequestObject) (CreateScreenResponseObject, error)
+
+	// (DELETE /screens/{id})
+	DeleteScreen(ctx context.Context, request DeleteScreenRequestObject) (DeleteScreenResponseObject, error)
+
+	// (GET /screens/{id})
+	GetScreen(ctx context.Context, request GetScreenRequestObject) (GetScreenResponseObject, error)
+	// UpdateScreen Save a screen; it re-renders shortly after
+	// (PUT /screens/{id})
+	UpdateScreen(ctx context.Context, request UpdateScreenRequestObject) (UpdateScreenResponseObject, error)
+	// PreviewScreen Render a screen, optionally with unsaved templates, without storing it
+	// (POST /screens/{id}/preview)
+	PreviewScreen(ctx context.Context, request PreviewScreenRequestObject) (PreviewScreenResponseObject, error)
+	// ListScreenRenders Render history, newest first
+	// (GET /screens/{id}/renders)
+	ListScreenRenders(ctx context.Context, request ListScreenRendersRequestObject) (ListScreenRendersResponseObject, error)
+	// RenderScreen Render and store now
+	// (POST /screens/{id}/renders)
+	RenderScreen(ctx context.Context, request RenderScreenRequestObject) (RenderScreenResponseObject, error)
 	// GetSystem Server information the dashboard needs
 	// (GET /system)
 	GetSystem(ctx context.Context, request GetSystemRequestObject) (GetSystemResponseObject, error)
@@ -1525,6 +3070,72 @@ func (sh *strictHandler) ListDeviceModels(w http.ResponseWriter, r *http.Request
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListDeviceModelsResponseObject); ok {
 		if err := validResponse.VisitListDeviceModelsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SetToneCurve operation middleware
+func (sh *strictHandler) SetToneCurve(w http.ResponseWriter, r *http.Request, id ModelID) {
+	var request SetToneCurveRequestObject
+
+	request.Id = id
+
+	var body SetToneCurveJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetToneCurve(ctx, request.(SetToneCurveRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetToneCurve")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetToneCurveResponseObject); ok {
+		if err := validResponse.VisitSetToneCurveResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PreviewToneCurve operation middleware
+func (sh *strictHandler) PreviewToneCurve(w http.ResponseWriter, r *http.Request, id ModelID) {
+	var request PreviewToneCurveRequestObject
+
+	request.Id = id
+
+	var body PreviewToneCurveJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PreviewToneCurve(ctx, request.(PreviewToneCurveRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PreviewToneCurve")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PreviewToneCurveResponseObject); ok {
+		if err := validResponse.VisitPreviewToneCurveResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -1667,6 +3278,58 @@ func (sh *strictHandler) ApproveDevice(w http.ResponseWriter, r *http.Request, i
 	}
 }
 
+// StopDeviceCalibration operation middleware
+func (sh *strictHandler) StopDeviceCalibration(w http.ResponseWriter, r *http.Request, id DeviceID) {
+	var request StopDeviceCalibrationRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.StopDeviceCalibration(ctx, request.(StopDeviceCalibrationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "StopDeviceCalibration")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(StopDeviceCalibrationResponseObject); ok {
+		if err := validResponse.VisitStopDeviceCalibrationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// StartDeviceCalibration operation middleware
+func (sh *strictHandler) StartDeviceCalibration(w http.ResponseWriter, r *http.Request, id DeviceID) {
+	var request StartDeviceCalibrationRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.StartDeviceCalibration(ctx, request.(StartDeviceCalibrationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "StartDeviceCalibration")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(StartDeviceCalibrationResponseObject); ok {
+		if err := validResponse.VisitStartDeviceCalibrationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // DisableDevice operation middleware
 func (sh *strictHandler) DisableDevice(w http.ResponseWriter, r *http.Request, id DeviceID) {
 	var request DisableDeviceRequestObject
@@ -1779,6 +3442,39 @@ func (sh *strictHandler) ListDeviceLogs(w http.ResponseWriter, r *http.Request, 
 	}
 }
 
+// SetDevicePlaylist operation middleware
+func (sh *strictHandler) SetDevicePlaylist(w http.ResponseWriter, r *http.Request, id DeviceID) {
+	var request SetDevicePlaylistRequestObject
+
+	request.Id = id
+
+	var body SetDevicePlaylistJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetDevicePlaylist(ctx, request.(SetDevicePlaylistRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetDevicePlaylist")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetDevicePlaylistResponseObject); ok {
+		if err := validResponse.VisitSetDevicePlaylistResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListDeviceTelemetry operation middleware
 func (sh *strictHandler) ListDeviceTelemetry(w http.ResponseWriter, r *http.Request, id DeviceID, params ListDeviceTelemetryParams) {
 	var request ListDeviceTelemetryRequestObject
@@ -1830,6 +3526,374 @@ func (sh *strictHandler) GetHealth(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// ListPlaylists operation middleware
+func (sh *strictHandler) ListPlaylists(w http.ResponseWriter, r *http.Request) {
+	var request ListPlaylistsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListPlaylists(ctx, request.(ListPlaylistsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListPlaylists")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListPlaylistsResponseObject); ok {
+		if err := validResponse.VisitListPlaylistsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreatePlaylist operation middleware
+func (sh *strictHandler) CreatePlaylist(w http.ResponseWriter, r *http.Request) {
+	var request CreatePlaylistRequestObject
+
+	var body CreatePlaylistJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreatePlaylist(ctx, request.(CreatePlaylistRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreatePlaylist")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreatePlaylistResponseObject); ok {
+		if err := validResponse.VisitCreatePlaylistResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeletePlaylist operation middleware
+func (sh *strictHandler) DeletePlaylist(w http.ResponseWriter, r *http.Request, id PlaylistID) {
+	var request DeletePlaylistRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeletePlaylist(ctx, request.(DeletePlaylistRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeletePlaylist")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeletePlaylistResponseObject); ok {
+		if err := validResponse.VisitDeletePlaylistResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetPlaylist operation middleware
+func (sh *strictHandler) GetPlaylist(w http.ResponseWriter, r *http.Request, id PlaylistID) {
+	var request GetPlaylistRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetPlaylist(ctx, request.(GetPlaylistRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetPlaylist")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetPlaylistResponseObject); ok {
+		if err := validResponse.VisitGetPlaylistResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdatePlaylist operation middleware
+func (sh *strictHandler) UpdatePlaylist(w http.ResponseWriter, r *http.Request, id PlaylistID) {
+	var request UpdatePlaylistRequestObject
+
+	request.Id = id
+
+	var body UpdatePlaylistJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdatePlaylist(ctx, request.(UpdatePlaylistRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdatePlaylist")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdatePlaylistResponseObject); ok {
+		if err := validResponse.VisitUpdatePlaylistResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListScreens operation middleware
+func (sh *strictHandler) ListScreens(w http.ResponseWriter, r *http.Request) {
+	var request ListScreensRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListScreens(ctx, request.(ListScreensRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListScreens")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListScreensResponseObject); ok {
+		if err := validResponse.VisitListScreensResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateScreen operation middleware
+func (sh *strictHandler) CreateScreen(w http.ResponseWriter, r *http.Request) {
+	var request CreateScreenRequestObject
+
+	var body CreateScreenJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateScreen(ctx, request.(CreateScreenRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateScreen")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateScreenResponseObject); ok {
+		if err := validResponse.VisitCreateScreenResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteScreen operation middleware
+func (sh *strictHandler) DeleteScreen(w http.ResponseWriter, r *http.Request, id ScreenID) {
+	var request DeleteScreenRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteScreen(ctx, request.(DeleteScreenRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteScreen")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteScreenResponseObject); ok {
+		if err := validResponse.VisitDeleteScreenResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetScreen operation middleware
+func (sh *strictHandler) GetScreen(w http.ResponseWriter, r *http.Request, id ScreenID) {
+	var request GetScreenRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetScreen(ctx, request.(GetScreenRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetScreen")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetScreenResponseObject); ok {
+		if err := validResponse.VisitGetScreenResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateScreen operation middleware
+func (sh *strictHandler) UpdateScreen(w http.ResponseWriter, r *http.Request, id ScreenID) {
+	var request UpdateScreenRequestObject
+
+	request.Id = id
+
+	var body UpdateScreenJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateScreen(ctx, request.(UpdateScreenRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateScreen")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateScreenResponseObject); ok {
+		if err := validResponse.VisitUpdateScreenResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PreviewScreen operation middleware
+func (sh *strictHandler) PreviewScreen(w http.ResponseWriter, r *http.Request, id ScreenID) {
+	var request PreviewScreenRequestObject
+
+	request.Id = id
+
+	var body PreviewScreenJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		if !errors.Is(err, io.EOF) {
+			sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+			return
+		}
+	} else {
+		request.Body = &body
+	}
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PreviewScreen(ctx, request.(PreviewScreenRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PreviewScreen")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PreviewScreenResponseObject); ok {
+		if err := validResponse.VisitPreviewScreenResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListScreenRenders operation middleware
+func (sh *strictHandler) ListScreenRenders(w http.ResponseWriter, r *http.Request, id ScreenID) {
+	var request ListScreenRendersRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListScreenRenders(ctx, request.(ListScreenRendersRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListScreenRenders")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListScreenRendersResponseObject); ok {
+		if err := validResponse.VisitListScreenRendersResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RenderScreen operation middleware
+func (sh *strictHandler) RenderScreen(w http.ResponseWriter, r *http.Request, id ScreenID) {
+	var request RenderScreenRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RenderScreen(ctx, request.(RenderScreenRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RenderScreen")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RenderScreenResponseObject); ok {
+		if err := validResponse.VisitRenderScreenResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetSystem operation middleware
 func (sh *strictHandler) GetSystem(w http.ResponseWriter, r *http.Request) {
 	var request GetSystemRequestObject
@@ -1859,47 +3923,75 @@ func (sh *strictHandler) GetSystem(w http.ResponseWriter, r *http.Request) {
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"EkPC3MRCILFogGV+QFQz4N842/nPAA==",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

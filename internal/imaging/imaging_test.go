@@ -73,3 +73,21 @@ func TestResizeFit(t *testing.T) {
 		t.Fatal("cover: expected the image to fill the canvas")
 	}
 }
+
+func TestToneCurve(t *testing.T) {
+	lut := LinearCurve.LUT()
+	if lut[0] != 0 || lut[128] != 128 || lut[255] != 255 {
+		t.Fatalf("linear lut wrong: %d %d %d", lut[0], lut[128], lut[255])
+	}
+	clipped := ToneCurve{Gamma: 1, Black: 0.1, White: 0.9}.LUT()
+	if clipped[20] != 0 || clipped[240] != 255 {
+		t.Fatalf("clipping wrong: %d %d", clipped[20], clipped[240])
+	}
+	dark := ToneCurve{Gamma: 2, Black: 0, White: 1}.LUT()
+	if dark[128] >= 128 {
+		t.Fatalf("gamma 2 should darken mid-tones, got %d", dark[128])
+	}
+	if (ToneCurve{Gamma: 1, Black: 0.5, White: 0.6}).Validate() == nil {
+		t.Fatal("narrow range should be invalid")
+	}
+}

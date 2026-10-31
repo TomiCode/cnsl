@@ -1,0 +1,10 @@
+DROP TABLE device_playback;
+ALTER TABLE devices DROP COLUMN calibrating_until;
+ALTER TABLE devices DROP COLUMN playlist_id;
+DROP TABLE playlist_items;
+DROP TABLE playlists;
+DROP TABLE renders;
+DROP TABLE regions;
+DROP TABLE screens;
+ALTER TABLE device_models DROP COLUMN screen_classes;
+ALTER TABLE device_models DROP COLUMN scale;

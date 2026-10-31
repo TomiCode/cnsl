@@ -7,6 +7,7 @@ import DeviceOverview from './device/DeviceOverview.vue'
 import DeviceImage from './device/DeviceImage.vue'
 import DeviceLogs from './device/DeviceLogs.vue'
 import DeviceTelemetry from './device/DeviceTelemetry.vue'
+import DeviceCalibration from './device/DeviceCalibration.vue'
 import { useDevicesStore } from '@/stores/devices'
 
 const route = useRoute()
@@ -23,6 +24,7 @@ const tabs = [
   { key: 'image', label: 'Image', component: DeviceImage },
   { key: 'logs', label: 'Logs', component: DeviceLogs },
   { key: 'telemetry', label: 'Telemetry', component: DeviceTelemetry },
+  { key: 'calibration', label: 'Calibration', component: DeviceCalibration },
 ] as const
 const tab = computed(() => tabs.find((t) => t.key === route.query.tab) ?? tabs[0])
 

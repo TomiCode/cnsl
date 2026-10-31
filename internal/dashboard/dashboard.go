@@ -12,10 +12,13 @@ import (
 	"github.com/getkin/kin-openapi/routers"
 	middleware "github.com/oapi-codegen/nethttp-middleware"
 
+	"github.com/TomiCode/cnsl/internal/assets"
 	"github.com/TomiCode/cnsl/internal/dashboard/gen"
 	"github.com/TomiCode/cnsl/internal/device"
 	"github.com/TomiCode/cnsl/internal/events"
+	"github.com/TomiCode/cnsl/internal/render"
 	"github.com/TomiCode/cnsl/internal/store"
+	"github.com/TomiCode/cnsl/internal/tmpl"
 )
 
 // BasePath is where the API is mounted; it matches `servers` in the spec.
@@ -28,6 +31,8 @@ type Options struct {
 	Events          *events.Broker
 	Timezone        *time.Location
 	DevicePublicURL string
+	Renderer        *render.Renderer
+	Scheduler       *render.Scheduler
 }
 
 type Server struct {
@@ -37,6 +42,8 @@ type Server struct {
 	events          *events.Broker
 	tz              *time.Location
 	devicePublicURL string
+	renderer        *render.Renderer
+	scheduler       *render.Scheduler
 }
 
 var _ gen.StrictServerInterface = (*Server)(nil)
@@ -49,6 +56,8 @@ func NewServer(opts Options) *Server {
 		events:          opts.Events,
 		tz:              opts.Timezone,
 		devicePublicURL: opts.DevicePublicURL,
+		renderer:        opts.Renderer,
+		scheduler:       opts.Scheduler,
 	}
 }
 
@@ -107,8 +116,10 @@ func (s *Server) GetHealth(ctx context.Context, _ gen.GetHealthRequestObject) (g
 
 func (s *Server) GetSystem(_ context.Context, _ gen.GetSystemRequestObject) (gen.GetSystemResponseObject, error) {
 	return gen.GetSystem200JSONResponse{
-		Version:         s.version,
-		Timezone:        s.tz.String(),
-		DevicePublicUrl: s.devicePublicURL,
+		Version:           s.version,
+		Timezone:          s.tz.String(),
+		DevicePublicUrl:   s.devicePublicURL,
+		FrameworkVersion:  assets.FrameworkVersion,
+		TemplateFunctions: tmpl.FuncNames(),
 	}, nil
 }

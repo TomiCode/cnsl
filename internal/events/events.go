@@ -13,11 +13,19 @@ const (
 	DeviceDeleted Type = "device.deleted"
 	DeviceSeen    Type = "device.seen" // device polled /api/display (new telemetry)
 	DeviceLogs    Type = "device.logs" // new log entries arrived
+
+	ScreenUpdated   Type = "screen.updated" // created, changed or deleted
+	ScreenRendered  Type = "screen.rendered"
+	PlaylistUpdated Type = "playlist.updated" // created, changed or deleted
+	ModelUpdated    Type = "model.updated"    // e.g. tone curve changed
 )
 
 type Event struct {
-	Type     Type  `json:"type"`
-	DeviceID int64 `json:"device_id,omitempty"`
+	Type       Type  `json:"type"`
+	DeviceID   int64 `json:"device_id,omitempty"`
+	ScreenID   int64 `json:"screen_id,omitempty"`
+	PlaylistID int64 `json:"playlist_id,omitempty"`
+	ModelID    int64 `json:"model_id,omitempty"`
 }
 
 // Broker fans events out to subscribers. Slow subscribers drop events rather than block

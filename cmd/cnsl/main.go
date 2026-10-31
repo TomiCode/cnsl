@@ -14,6 +14,7 @@ import (
 	"time"
 	_ "time/tzdata" // timezones work in minimal container images
 
+	"github.com/TomiCode/cnsl/internal/assets"
 	"github.com/TomiCode/cnsl/internal/config"
 	"github.com/TomiCode/cnsl/internal/dashboard"
 	"github.com/TomiCode/cnsl/internal/device"
@@ -21,6 +22,7 @@ import (
 	"github.com/TomiCode/cnsl/internal/firmware"
 	"github.com/TomiCode/cnsl/internal/httpx"
 	"github.com/TomiCode/cnsl/internal/imaging"
+	"github.com/TomiCode/cnsl/internal/render"
 	"github.com/TomiCode/cnsl/internal/store"
 	"github.com/TomiCode/cnsl/web"
 )
@@ -60,7 +62,22 @@ func run() error {
 	}
 
 	broker := events.NewBroker()
-	devices := device.NewService(st, broker, imaging.Files{Dir: cfg.ImagesDir()}, cfg.Timezone, logger)
+	files := imaging.Files{Dir: cfg.ImagesDir()}
+	devices := device.NewService(st, broker, files, cfg.Timezone, logger)
+
+	browser := render.NewBrowser(cfg.ChromeURL, 2, logger)
+	defer browser.Close()
+	renderer := render.NewRenderer(render.Options{
+		Store:    st,
+		Files:    files,
+		Browser:  browser,
+		BaseURL:  cfg.RenderBaseURL,
+		Timezone: cfg.Timezone,
+		Log:      logger,
+	})
+	scheduler := render.NewScheduler(renderer, st, broker, logger)
+	devices.SetScreens(scheduler)
+	go scheduler.Run(ctx)
 
 	api, err := dashboard.NewServer(dashboard.Options{
 		Version:         version,
@@ -69,6 +86,8 @@ func run() error {
 		Events:          broker,
 		Timezone:        cfg.Timezone,
 		DevicePublicURL: cfg.DevicePublicURL,
+		Renderer:        renderer,
+		Scheduler:       scheduler,
 	}).Handler()
 	if err != nil {
 		return err
@@ -86,6 +105,9 @@ func run() error {
 	// The device API is mirrored on the dashboard listener so the browser-based virtual device
 	// (and image previews) work same-origin, without CORS.
 	dashMux.Handle("/device/", http.StripPrefix("/device", deviceHandler))
+	// What the headless browser loads while rendering. The framework CSS hard-codes /fonts/.
+	dashMux.Handle("/internal/render/", renderer.Handler())
+	dashMux.Handle("/fonts/", http.StripPrefix("/fonts/", assets.FontsHandler()))
 	dashMux.Handle("/", web.Handler())
 
 	servers := []*http.Server{

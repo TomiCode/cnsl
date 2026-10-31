@@ -11,6 +11,10 @@ const eventTypes: ServerEvent['type'][] = [
   'device.deleted',
   'device.seen',
   'device.logs',
+  'screen.updated',
+  'screen.rendered',
+  'playlist.updated',
+  'model.updated',
 ]
 
 // One shared SSE connection to /api/v1/events; stores and views subscribe to it.

@@ -10,25 +10,27 @@ import (
 
 func toDevice(d store.Device, latest *store.Telemetry) gen.Device {
 	out := gen.Device{
-		Id:              d.ID,
-		Mac:             d.MAC,
-		ApiKey:          d.APIKey,
-		FriendlyId:      d.FriendlyID,
-		Label:           d.Label,
-		Status:          gen.DeviceStatus(d.Status),
-		ModelId:         nullInt64(d.ModelID),
-		RefreshRate:     d.RefreshRate,
-		SleepStart:      nullString(d.SleepStart),
-		SleepEnd:        nullString(d.SleepEnd),
-		ImageFilename:   nullString(d.ImageFilename),
-		FirmwareVersion: nullString(d.FirmwareVersion),
-		ReportedModel:   nullString(d.ReportedModel),
-		ReportedWidth:   nullInt(d.ReportedWidth),
-		ReportedHeight:  nullInt(d.ReportedHeight),
-		LastSeenAt:      d.LastSeenAt.Ptr(),
-		ApprovedAt:      d.ApprovedAt.Ptr(),
-		CreatedAt:       d.CreatedAt.Time,
-		UpdatedAt:       d.UpdatedAt.Time,
+		Id:               d.ID,
+		Mac:              d.MAC,
+		ApiKey:           d.APIKey,
+		FriendlyId:       d.FriendlyID,
+		Label:            d.Label,
+		Status:           gen.DeviceStatus(d.Status),
+		ModelId:          nullInt64(d.ModelID),
+		RefreshRate:      d.RefreshRate,
+		SleepStart:       nullString(d.SleepStart),
+		SleepEnd:         nullString(d.SleepEnd),
+		ImageFilename:    nullString(d.ImageFilename),
+		PlaylistId:       nullInt64(d.PlaylistID),
+		CalibratingUntil: d.CalibratingUntil.Ptr(),
+		FirmwareVersion:  nullString(d.FirmwareVersion),
+		ReportedModel:    nullString(d.ReportedModel),
+		ReportedWidth:    nullInt(d.ReportedWidth),
+		ReportedHeight:   nullInt(d.ReportedHeight),
+		LastSeenAt:       d.LastSeenAt.Ptr(),
+		ApprovedAt:       d.ApprovedAt.Ptr(),
+		CreatedAt:        d.CreatedAt.Time,
+		UpdatedAt:        d.UpdatedAt.Time,
 	}
 	if latest != nil {
 		t := toTelemetry(*latest)
@@ -46,6 +48,7 @@ func toDeviceModel(m store.DeviceModel) gen.DeviceModel {
 		Width:         m.Width,
 		Height:        m.Height,
 		BitDepth:      gen.DeviceModelBitDepth(m.BitDepth),
+		ToneCurve:     toToneCurve(m.ToneCurve),
 	}
 }
 

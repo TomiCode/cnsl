@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: cnsl dashboard API
-  version: 0.2.0
+  version: 0.3.0
   description: |
     API used by the cnsl web dashboard. Device (firmware) endpoints are not part of this spec;
     they are served on the separate device listener (and mirrored under /device on the
@@ -12,6 +12,8 @@ servers:
 tags:
   - name: system
   - name: devices
+  - name: screens
+  - name: playlists
   - name: stream
     description: Server-Sent Events. Implemented by hand (not generated) because it streams.
 
@@ -259,9 +261,313 @@ paths:
         "404":
           $ref: "#/components/responses/Problem"
 
+  /devices/{id}/playlist:
+    parameters:
+      - $ref: "#/components/parameters/DeviceID"
+    put:
+      operationId: setDevicePlaylist
+      summary: Assign a playlist (or none) and restart the rotation
+      tags: [devices]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                playlist_id: { type: integer, format: int64, nullable: true }
+      responses:
+        "200":
+          $ref: "#/components/responses/Device"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+
+  /devices/{id}/calibration:
+    parameters:
+      - $ref: "#/components/parameters/DeviceID"
+    post:
+      operationId: startDeviceCalibration
+      summary: Show the gray calibration pattern on the device for 30 minutes
+      tags: [devices]
+      responses:
+        "200":
+          $ref: "#/components/responses/Device"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: stopDeviceCalibration
+      tags: [devices]
+      responses:
+        "200":
+          $ref: "#/components/responses/Device"
+        "404":
+          $ref: "#/components/responses/Problem"
+
+  /device-models/{id}/tone-curve:
+    parameters:
+      - $ref: "#/components/parameters/ModelID"
+    put:
+      operationId: setToneCurve
+      summary: Save a model's gray tone curve; its screens re-render
+      tags: [devices]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ToneCurve"
+      responses:
+        "200":
+          description: The model
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceModel"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+
+  /device-models/{id}/tone-curve/preview:
+    parameters:
+      - $ref: "#/components/parameters/ModelID"
+    post:
+      operationId: previewToneCurve
+      summary: Render the calibration pattern with an unsaved curve
+      tags: [devices]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ToneCurve"
+      responses:
+        "200":
+          description: Calibration pattern as the device would get it
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Preview"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+
+  /screens:
+    get:
+      operationId: listScreens
+      tags: [screens]
+      responses:
+        "200":
+          description: All screens (without templates)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ScreenSummary"
+    post:
+      operationId: createScreen
+      summary: Create a screen with one full-size region and a starter template
+      tags: [screens]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScreenCreate"
+      responses:
+        "201":
+          $ref: "#/components/responses/Screen"
+        "422":
+          $ref: "#/components/responses/Problem"
+
+  /screens/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ScreenID"
+    get:
+      operationId: getScreen
+      tags: [screens]
+      responses:
+        "200":
+          $ref: "#/components/responses/Screen"
+        "404":
+          $ref: "#/components/responses/Problem"
+    put:
+      operationId: updateScreen
+      summary: Save a screen; it re-renders shortly after
+      tags: [screens]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScreenUpdate"
+      responses:
+        "200":
+          $ref: "#/components/responses/Screen"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "422":
+          description: Invalid input or template syntax errors
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/TemplateProblem"
+    delete:
+      operationId: deleteScreen
+      tags: [screens]
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          $ref: "#/components/responses/Problem"
+
+  /screens/{id}/preview:
+    parameters:
+      - $ref: "#/components/parameters/ScreenID"
+    post:
+      operationId: previewScreen
+      summary: Render a screen, optionally with unsaved templates, without storing it
+      tags: [screens]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PreviewRequest"
+      responses:
+        "200":
+          description: The browser render and the device image
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Preview"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+
+  /screens/{id}/renders:
+    parameters:
+      - $ref: "#/components/parameters/ScreenID"
+    get:
+      operationId: listScreenRenders
+      summary: Render history, newest first
+      tags: [screens]
+      responses:
+        "200":
+          description: Renders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Render"
+        "404":
+          $ref: "#/components/responses/Problem"
+    post:
+      operationId: renderScreen
+      summary: Render and store now
+      tags: [screens]
+      responses:
+        "200":
+          description: The new render
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Render"
+        "404":
+          $ref: "#/components/responses/Problem"
+
+  /playlists:
+    get:
+      operationId: listPlaylists
+      tags: [playlists]
+      responses:
+        "200":
+          description: All playlists
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Playlist"
+    post:
+      operationId: createPlaylist
+      tags: [playlists]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlaylistInput"
+      responses:
+        "201":
+          $ref: "#/components/responses/Playlist"
+        "422":
+          $ref: "#/components/responses/Problem"
+
+  /playlists/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PlaylistID"
+    get:
+      operationId: getPlaylist
+      tags: [playlists]
+      responses:
+        "200":
+          $ref: "#/components/responses/Playlist"
+        "404":
+          $ref: "#/components/responses/Problem"
+    put:
+      operationId: updatePlaylist
+      summary: Replace name and items (items keep their id when given)
+      tags: [playlists]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlaylistInput"
+      responses:
+        "200":
+          $ref: "#/components/responses/Playlist"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: deletePlaylist
+      tags: [playlists]
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          $ref: "#/components/responses/Problem"
+
 components:
   parameters:
     DeviceID:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer, format: int64 }
+    ScreenID:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer, format: int64 }
+    PlaylistID:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer, format: int64 }
+    ModelID:
       name: id
       in: path
       required: true
@@ -278,6 +584,18 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/Device"
+    Screen:
+      description: The screen
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Screen"
+    Playlist:
+      description: The playlist
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Playlist"
     Problem:
       description: Error
       content:
@@ -302,9 +620,14 @@ components:
 
     SystemInfo:
       type: object
-      required: [version, timezone, device_public_url]
+      required: [version, timezone, device_public_url, template_functions, framework_version]
       properties:
         version: { type: string }
+        framework_version: { type: string, example: 3.4.4 }
+        template_functions:
+          type: array
+          items: { type: string }
+          description: Helper functions available in screen templates.
         timezone: { type: string, example: Europe/Vienna }
         device_public_url:
           type: string
@@ -316,14 +639,16 @@ components:
       properties:
         type:
           type: string
-          enum: [device.created, device.updated, device.deleted, device.seen, device.logs]
-        device_id:
-          type: integer
-          format: int64
+          enum: [device.created, device.updated, device.deleted, device.seen, device.logs,
+                 screen.updated, screen.rendered, playlist.updated, model.updated]
+        device_id: { type: integer, format: int64 }
+        screen_id: { type: integer, format: int64 }
+        playlist_id: { type: integer, format: int64 }
+        model_id: { type: integer, format: int64 }
 
     DeviceModel:
       type: object
-      required: [id, key, name, width, height, bit_depth]
+      required: [id, key, name, width, height, bit_depth, tone_curve]
       properties:
         id: { type: integer, format: int64 }
         key: { type: string }
@@ -332,6 +657,8 @@ components:
         width: { type: integer }
         height: { type: integer }
         bit_depth: { type: integer, enum: [1, 2, 4] }
+        tone_curve:
+          $ref: "#/components/schemas/ToneCurve"
 
     DeviceStatus:
       type: string
@@ -357,7 +684,13 @@ components:
         image_filename:
           type: string
           nullable: true
-          description: Static image assigned to the device; null = placeholder.
+          description: Static image, shown when the device has no playlist; null = placeholder.
+        playlist_id: { type: integer, format: int64, nullable: true }
+        calibrating_until:
+          type: string
+          format: date-time
+          nullable: true
+          description: While in the future, the device shows the gray calibration pattern.
         firmware_version: { type: string, nullable: true }
         reported_model: { type: string, nullable: true }
         reported_width: { type: integer, nullable: true }
@@ -443,6 +776,183 @@ components:
           format: int64
           nullable: true
           description: Pass as before_id to load older entries; null when there are none.
+
+    ToneCurve:
+      type: object
+      required: [gamma, black, white]
+      properties:
+        gamma: { type: number, minimum: 0.2, maximum: 5, example: 1.0 }
+        black: { type: number, minimum: 0, maximum: 0.8, example: 0.0 }
+        white: { type: number, minimum: 0.2, maximum: 1, example: 1.0 }
+
+    Region:
+      type: object
+      required: [id, key, x, y, w, h, template]
+      properties:
+        id: { type: integer, format: int64 }
+        key: { type: string, example: main }
+        x: { type: integer }
+        y: { type: integer }
+        w: { type: integer }
+        h: { type: integer }
+        template: { type: string }
+
+    Render:
+      type: object
+      required: [id, status, duration_ms, trigger, created_at]
+      properties:
+        id: { type: integer, format: int64 }
+        status: { type: string, enum: [ok, error] }
+        filename: { type: string, nullable: true }
+        error: { type: string, nullable: true }
+        duration_ms: { type: integer, format: int64 }
+        trigger: { type: string, example: edit }
+        created_at: { type: string, format: date-time }
+
+    ScreenSummary:
+      type: object
+      required: [id, name, model_id, render_interval, updated_at]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        model_id: { type: integer, format: int64 }
+        render_interval: { type: integer }
+        updated_at: { type: string, format: date-time }
+        latest_render:
+          $ref: "#/components/schemas/Render"
+        latest_image:
+          type: string
+          nullable: true
+          description: Filename of the newest successful render.
+
+    Screen:
+      allOf:
+        - $ref: "#/components/schemas/ScreenSummary"
+        - type: object
+          required: [framework_version, head, regions]
+          properties:
+            framework_version: { type: string }
+            head:
+              type: string
+              description: Extra HTML for the page head (styles).
+            regions:
+              type: array
+              items:
+                $ref: "#/components/schemas/Region"
+
+    ScreenCreate:
+      type: object
+      required: [name, model_id]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        model_id: { type: integer, format: int64 }
+
+    ScreenUpdate:
+      type: object
+      required: [name, model_id, head, render_interval, regions]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        model_id: { type: integer, format: int64 }
+        head: { type: string, maxLength: 100000 }
+        render_interval: { type: integer, minimum: 60, maximum: 86400 }
+        regions:
+          type: array
+          items:
+            type: object
+            required: [id, template]
+            properties:
+              id: { type: integer, format: int64 }
+              template: { type: string, maxLength: 200000 }
+
+    PreviewRequest:
+      type: object
+      properties:
+        templates:
+          type: object
+          description: Unsaved region templates by region key.
+          additionalProperties: { type: string }
+        head: { type: string }
+
+    TemplateError:
+      type: object
+      required: [region, line, column, message]
+      properties:
+        region: { type: string }
+        line: { type: integer }
+        column: { type: integer }
+        message: { type: string }
+
+    Preview:
+      type: object
+      required: [raw, device, errors, duration_ms]
+      properties:
+        raw:
+          type: string
+          description: data:image/png;base64 URL of the browser screenshot.
+        device:
+          type: string
+          description: data:image/png;base64 URL of the image as the device gets it.
+        errors:
+          type: array
+          items:
+            $ref: "#/components/schemas/TemplateError"
+        duration_ms: { type: integer, format: int64 }
+
+    TemplateProblem:
+      allOf:
+        - $ref: "#/components/schemas/Problem"
+        - type: object
+          properties:
+            template_errors:
+              type: array
+              items:
+                $ref: "#/components/schemas/TemplateError"
+
+    PlaylistItem:
+      type: object
+      required: [screen_id, dwell, enabled]
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Omit for new items.
+        screen_id: { type: integer, format: int64 }
+        dwell:
+          type: integer
+          minimum: 1
+          maximum: 1000
+          description: Number of device wakes the item stays on screen.
+        refresh_rate:
+          type: integer
+          nullable: true
+          minimum: 30
+          maximum: 86400
+          description: Seconds between wakes while this item shows; null = the device's own rate.
+        enabled: { type: boolean }
+
+    Playlist:
+      type: object
+      required: [id, name, items, device_count, updated_at]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlaylistItem"
+        device_count: { type: integer }
+        updated_at: { type: string, format: date-time }
+
+    PlaylistInput:
+      type: object
+      required: [name, items]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        items:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/PlaylistItem"
 
     Problem:
       description: RFC 9457 problem details.

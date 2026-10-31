@@ -31,28 +31,32 @@ type DeviceModel struct {
 	Rotation      int            `db:"rotation"`
 	ToneCurve     sql.NullString `db:"tone_curve"`
 	Builtin       bool           `db:"builtin"`
+	Scale         float64        `db:"scale"`
+	ScreenClasses string         `db:"screen_classes"`
 }
 
 type Device struct {
-	ID              int64          `db:"id"`
-	MAC             string         `db:"mac"`
-	APIKey          string         `db:"api_key"`
-	FriendlyID      string         `db:"friendly_id"`
-	Label           string         `db:"label"`
-	Status          DeviceStatus   `db:"status"`
-	ModelID         sql.NullInt64  `db:"model_id"`
-	RefreshRate     int            `db:"refresh_rate"`
-	SleepStart      sql.NullString `db:"sleep_start"`
-	SleepEnd        sql.NullString `db:"sleep_end"`
-	ImageFilename   sql.NullString `db:"image_filename"`
-	FirmwareVersion sql.NullString `db:"firmware_version"`
-	ReportedModel   sql.NullString `db:"reported_model"`
-	ReportedWidth   sql.NullInt64  `db:"reported_width"`
-	ReportedHeight  sql.NullInt64  `db:"reported_height"`
-	LastSeenAt      NullTime       `db:"last_seen_at"`
-	ApprovedAt      NullTime       `db:"approved_at"`
-	CreatedAt       Time           `db:"created_at"`
-	UpdatedAt       Time           `db:"updated_at"`
+	ID               int64          `db:"id"`
+	MAC              string         `db:"mac"`
+	APIKey           string         `db:"api_key"`
+	FriendlyID       string         `db:"friendly_id"`
+	Label            string         `db:"label"`
+	Status           DeviceStatus   `db:"status"`
+	ModelID          sql.NullInt64  `db:"model_id"`
+	RefreshRate      int            `db:"refresh_rate"`
+	SleepStart       sql.NullString `db:"sleep_start"`
+	SleepEnd         sql.NullString `db:"sleep_end"`
+	ImageFilename    sql.NullString `db:"image_filename"`
+	FirmwareVersion  sql.NullString `db:"firmware_version"`
+	ReportedModel    sql.NullString `db:"reported_model"`
+	ReportedWidth    sql.NullInt64  `db:"reported_width"`
+	ReportedHeight   sql.NullInt64  `db:"reported_height"`
+	LastSeenAt       NullTime       `db:"last_seen_at"`
+	ApprovedAt       NullTime       `db:"approved_at"`
+	CreatedAt        Time           `db:"created_at"`
+	UpdatedAt        Time           `db:"updated_at"`
+	PlaylistID       sql.NullInt64  `db:"playlist_id"`
+	CalibratingUntil NullTime       `db:"calibrating_until"`
 }
 
 func (s *Store) DeviceModels(ctx context.Context) ([]DeviceModel, error) {
@@ -122,7 +126,8 @@ func (s *Store) UpdateDevice(ctx context.Context, d *Device) error {
 			sleep_start = :sleep_start, sleep_end = :sleep_end, image_filename = :image_filename,
 			firmware_version = :firmware_version, reported_model = :reported_model,
 			reported_width = :reported_width, reported_height = :reported_height,
-			last_seen_at = :last_seen_at, approved_at = :approved_at, updated_at = :updated_at
+			last_seen_at = :last_seen_at, approved_at = :approved_at, updated_at = :updated_at,
+			playlist_id = :playlist_id, calibrating_until = :calibrating_until
 		WHERE id = :id`, d)
 	if err != nil {
 		return fmt.Errorf("update device: %w", err)
@@ -230,4 +235,12 @@ func affected(res sql.Result) error {
 		return ErrNotFound
 	}
 	return nil
+}
+
+func (s *Store) UpdateToneCurve(ctx context.Context, modelID int64, curve sql.NullString) error {
+	res, err := s.DB.ExecContext(ctx, `UPDATE device_models SET tone_curve = ? WHERE id = ?`, curve, modelID)
+	if err != nil {
+		return err
+	}
+	return affected(res)
 }

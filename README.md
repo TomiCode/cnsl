@@ -3,8 +3,9 @@
 A self-hosted server and dashboard for TRMNL e-ink devices: Go backend, Vue 3 dashboard, SQLite,
 screens rendered with headless Chrome. Design docs live in a separate repository (`../docs`).
 
-Status: **phase 1** — devices on the wire: firmware endpoints, pending → approve flow, telemetry,
-device logs with live tail, static images (resized, dithered, 4-bit PNG), virtual test device.
+Status: **phase 2** — screens & rendering: Go-template screens edited in Monaco with live preview,
+rendered by headless Chrome with trmnl-framework into 4-bit PNGs, playlists (wake-count rotation),
+gray-tone calibration. Phase 1: devices, approvals, telemetry, logs, static images, virtual device.
 
 ## Connecting a TRMNL
 
@@ -24,7 +25,10 @@ internal/dashboard/    dashboard API implementation (+ SSE); gen/ is generated b
 internal/device/       device lifecycle: provisioning, approval, telemetry, logs, images
 internal/events/       in-process pub/sub feeding the SSE stream
 internal/firmware/     device listener (/api/setup, /api/display, /api/log, /images)
-internal/imaging/      grayscale, resize, quantize/dither, 1/2/4-bit PNG encoder
+internal/imaging/      grayscale, resize, tone curve, quantize/dither, 1/2/4-bit PNG encoder
+internal/render/       page composition, headless browser, render pipeline, scheduler, calibration
+internal/tmpl/         screen template engine (html/template + helpers)
+internal/assets/       vendored trmnl-framework release (scripts/vendor-framework.sh)
 internal/migrations/   embedded SQL migrations (golang-migrate)
 internal/store/        SQLite (modernc, sqlx)
 web/                   Vue 3 + Vite + Tailwind dashboard, embedded into the binary
@@ -32,7 +36,14 @@ web/                   Vue 3 + Vite + Tailwind dashboard, embedded into the bina
 
 ## Development
 
-Requirements: Go 1.27+, Node 24+, yarn 1.x.
+Requirements: Go 1.27+, Node 24+, yarn 1.x, and Chrome or Edge for rendering (found automatically;
+or point `CNSL_CHROME_URL` at a headless-shell container).
+
+`go test ./...` includes a real-browser render test; `go test -short ./...` skips it. Set
+`CNSL_RENDER_OUT=<dir>` to dump its images.
+
+To update the screen framework: `scripts/vendor-framework.sh ../trmnl-framework <version>` and bump
+`assets.FrameworkVersion`.
 
 ```bash
 cd web && yarn install && yarn build   # once, so the binary has a dashboard to embed

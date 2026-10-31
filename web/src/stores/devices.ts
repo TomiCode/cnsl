@@ -94,11 +94,34 @@ export const useDevicesStore = defineStore('devices', () => {
     return replace(unwrap(await api.DELETE('/devices/{id}/image', { params: { path: { id } } })))
   }
 
+  async function setPlaylist(id: number, playlistId: number | null) {
+    return replace(unwrap(await api.PUT('/devices/{id}/playlist', { params: { path: { id } }, body: { playlist_id: playlistId } })))
+  }
+
+  async function startCalibration(id: number) {
+    return replace(unwrap(await api.POST('/devices/{id}/calibration', { params: { path: { id } } })))
+  }
+
+  async function stopCalibration(id: number) {
+    return replace(unwrap(await api.DELETE('/devices/{id}/calibration', { params: { path: { id } } })))
+  }
+
+  async function setToneCurve(modelId: number, curve: Schemas['ToneCurve']) {
+    const m = unwrap(await api.PUT('/device-models/{id}/tone-curve', { params: { path: { id: modelId } }, body: curve }))
+    const i = models.value.findIndex((x) => x.id === m.id)
+    if (i >= 0) models.value[i] = m
+    return m
+  }
+
   // Keep the list live: refetch the affected device on every server event.
   useEventsStore().subscribe((e) => {
     if (!loaded.value) return
-    if (e.device_id == null) {
+    if (e.type === 'model.updated') {
       void load()
+    } else if (!e.type.startsWith('device.')) {
+      return
+    } else if (e.device_id == null) {
+      void load() // reconnect: we may have missed events
     } else if (e.type === 'device.deleted') {
       devices.value = devices.value.filter((d) => d.id !== e.device_id)
     } else if (e.type !== 'device.logs') {
@@ -122,5 +145,9 @@ export const useDevicesStore = defineStore('devices', () => {
     remove,
     setImage,
     clearImage,
+    setPlaylist,
+    startCalibration,
+    stopCalibration,
+    setToneCurve,
   }
 })

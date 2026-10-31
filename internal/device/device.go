@@ -24,11 +24,27 @@ var ErrInvalid = errors.New("invalid request")
 const defaultRefreshRate = 900
 
 type Service struct {
-	store  *store.Store
-	events *events.Broker
-	files  imaging.Files
-	tz     *time.Location
-	log    *slog.Logger
+	store   *store.Store
+	events  *events.Broker
+	files   imaging.Files
+	tz      *time.Location
+	log     *slog.Logger
+	screens Screens
+}
+
+// Screens is what the device service needs from rendering.
+type Screens interface {
+	// LatestImage is the filename of the screen's newest successful render.
+	LatestImage(ctx context.Context, screenID int64) (filename string, ok bool, err error)
+	// Request asks for a render soon (e.g. a device is waiting for a screen without one).
+	Request(screenID int64, trigger string)
+	// Calibration is the gray calibration pattern for a model with its current tone curve.
+	Calibration(ctx context.Context, modelID int64) (string, error)
+}
+
+// SetScreens connects the renderer; until then devices only get static images.
+func (s *Service) SetScreens(sc Screens) {
+	s.screens = sc
 }
 
 func NewService(st *store.Store, ev *events.Broker, files imaging.Files, tz *time.Location, log *slog.Logger) *Service {
@@ -136,14 +152,14 @@ func (s *Service) Display(ctx context.Context, req DisplayRequest) (DisplayResul
 
 	result := DisplayResult{Outcome: NotRegistered}
 	if d.Status == store.DeviceActive {
-		filename, err := s.currentImage(ctx, d)
+		filename, rate, err := s.choose(ctx, d, now)
 		if err != nil {
 			return DisplayResult{}, err
 		}
 		result = DisplayResult{
 			Outcome:     ShowImage,
 			Filename:    filename,
-			RefreshRate: refreshRate(now.In(s.tz), d.RefreshRate, d.SleepStart.String, d.SleepEnd.String),
+			RefreshRate: refreshRate(now.In(s.tz), rate, d.SleepStart.String, d.SleepEnd.String),
 		}
 	}
 
@@ -224,7 +240,8 @@ func (s *Service) SetImage(ctx context.Context, id int64, img image.Image, fit i
 	if err != nil {
 		return d, err
 	}
-	gray := imaging.Resize(imaging.Gray(img), m.Width, m.Height, fit)
+	curve, _ := imaging.ParseToneCurve(m.ToneCurve.String)
+	gray := curve.Apply(imaging.Resize(imaging.Gray(img), m.Width, m.Height, fit))
 	name, err := s.files.Save(imaging.Quantize(gray, m.BitDepth, dither), m.BitDepth)
 	if err != nil {
 		return d, err

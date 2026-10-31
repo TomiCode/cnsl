@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { Eye, EyeOff, TriangleAlert } from 'lucide-vue-next'
 import DeviceVitals from '@/components/DeviceVitals.vue'
 import { useDevicesStore, type Device } from '@/stores/devices'
+import { usePlaylistsStore } from '@/stores/playlists'
 import { dateTime, duration, imageUrl, timeAgo } from '@/lib/format'
 
 const props = defineProps<{ device: Device }>()
@@ -33,6 +34,24 @@ function reset() {
   form.sleep_end = d.sleep_end ?? '06:00'
 }
 watch(() => props.device.id, reset, { immediate: true })
+
+const playlists = usePlaylistsStore()
+const playlistBusy = ref(false)
+onMounted(() => {
+  if (!playlists.loaded) void playlists.load()
+})
+async function changePlaylist(e: Event) {
+  const v = (e.target as HTMLSelectElement).value
+  playlistBusy.value = true
+  message.value = null
+  try {
+    await store.setPlaylist(props.device.id, v === '' ? null : Number(v))
+  } catch (err) {
+    message.value = { ok: false, text: (err as Error).message }
+  } finally {
+    playlistBusy.value = false
+  }
+}
 
 async function save() {
   saving.value = true
@@ -99,6 +118,18 @@ const input =
     </div>
 
     <div class="flex flex-col gap-6 lg:col-span-2">
+      <div class="rounded-lg border border-zinc-200 bg-white p-4">
+        <div class="mb-1 text-sm font-medium">Content</div>
+        <p class="mb-3 text-xs text-zinc-500">Without a playlist the device shows its static image (or a placeholder).</p>
+        <select :value="device.playlist_id ?? ''" :class="input" :disabled="playlistBusy" @change="changePlaylist">
+          <option value="">No playlist</option>
+          <option v-for="p in playlists.playlists" :key="p.id" :value="p.id">{{ p.name }} ({{ p.items.length }} items)</option>
+        </select>
+        <p v-if="device.calibrating_until && new Date(device.calibrating_until) > new Date()" class="mt-2 text-xs text-amber-700">
+          Showing the calibration pattern until {{ dateTime(device.calibrating_until) }}.
+        </p>
+      </div>
+
       <form class="rounded-lg border border-zinc-200 bg-white p-4" @submit.prevent="save">
         <div class="mb-4 text-sm font-medium">Settings</div>
         <label class="mb-3 block text-sm">
