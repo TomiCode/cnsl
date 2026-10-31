@@ -17,9 +17,8 @@ const (
 )
 
 // choose decides the image and refresh rate for an active device on this wake:
-// calibration pattern while calibrating, else the device's playlist, else its static image or
-// the placeholder.
-func (s *Service) choose(ctx context.Context, d *store.Device, now time.Time) (string, int, error) {
+// calibration pattern while calibrating, else the device's playlist, else the placeholder.
+func (s *Service) choose(ctx context.Context, d *store.Device, now time.Time, wakeReason string) (string, int, error) {
 	if s.screens != nil && d.CalibratingUntil.Valid && now.Before(d.CalibratingUntil.Time.Time) && d.ModelID.Valid {
 		name, err := s.screens.Calibration(ctx, d.ModelID.Int64)
 		if err == nil {
@@ -29,7 +28,7 @@ func (s *Service) choose(ctx context.Context, d *store.Device, now time.Time) (s
 	}
 
 	if s.screens != nil && d.PlaylistID.Valid && d.ModelID.Valid {
-		name, rate, ok, err := s.playNext(ctx, d)
+		name, rate, ok, err := s.playNext(ctx, d, buttonWake(wakeReason))
 		if err != nil {
 			return "", 0, err
 		}
@@ -37,18 +36,29 @@ func (s *Service) choose(ctx context.Context, d *store.Device, now time.Time) (s
 			return name, rate, nil
 		}
 		if rate > 0 { // the screen is being rendered: show what we have, come back soon
-			name, err := s.currentImage(ctx, d)
+			name, err := s.placeholder(ctx, d)
 			return name, rate, err
 		}
 	}
 
-	name, err := s.currentImage(ctx, d)
+	name, err := s.placeholder(ctx, d)
 	return name, d.RefreshRate, err
 }
 
+// buttonWake reports whether the device was woken by its button (or touch) rather than its timer.
+// The TRMNL X sends EXT0 for a button press (observed on firmware 1.8.6).
+func buttonWake(reason string) bool {
+	switch reason {
+	case "button", "EXT0", "EXT1", "touchpad":
+		return true
+	}
+	return false
+}
+
 // playNext advances the device's playlist position by one wake (rotation counts wakes, see
-// docs/03) and returns that item's latest render. ok is false when nothing is playable yet.
-func (s *Service) playNext(ctx context.Context, d *store.Device) (string, int, bool, error) {
+// docs/03), or straight to the next item when skip is set (button press), and returns that item's
+// latest render. ok is false when nothing is playable yet.
+func (s *Service) playNext(ctx context.Context, d *store.Device, skip bool) (string, int, bool, error) {
 	items, err := s.store.PlayableItems(ctx, d.PlaylistID.Int64, d.ModelID.Int64)
 	if err != nil || len(items) == 0 {
 		return "", 0, false, err
@@ -68,7 +78,7 @@ func (s *Service) playNext(ctx context.Context, d *store.Device) (string, int, b
 	switch {
 	case idx < 0: // first time, or the item was removed/disabled
 		idx, pb.ShownCount = 0, 0
-	case pb.ShownCount >= items[idx].Dwell:
+	case pb.ShownCount >= items[idx].Dwell, skip && pb.ShownCount > 0:
 		idx, pb.ShownCount = (idx+1)%len(items), 0
 	}
 	item := items[idx]

@@ -26,6 +26,45 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for BackgroundKind.
+const (
+	BackgroundKindImage     BackgroundKind = "image"
+	BackgroundKindNone      BackgroundKind = "none"
+	BackgroundKindSlideshow BackgroundKind = "slideshow"
+)
+
+// Valid indicates whether the value is a known member of the BackgroundKind enum.
+func (e BackgroundKind) Valid() bool {
+	switch e {
+	case BackgroundKindImage:
+		return true
+	case BackgroundKindNone:
+		return true
+	case BackgroundKindSlideshow:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BackgroundOrder.
+const (
+	Sequential BackgroundOrder = "sequential"
+	Shuffle    BackgroundOrder = "shuffle"
+)
+
+// Valid indicates whether the value is a known member of the BackgroundOrder enum.
+func (e BackgroundOrder) Valid() bool {
+	switch e {
+	case Sequential:
+		return true
+	case Shuffle:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DeviceModelBitDepth.
 const (
 	N1 DeviceModelBitDepth = 1
@@ -145,16 +184,22 @@ func (e HealthStatus) Valid() bool {
 
 // Defines values for ImageDither.
 const (
-	FloydSteinberg ImageDither = "floyd-steinberg"
-	None           ImageDither = "none"
+	ImageDitherAtkinson       ImageDither = "atkinson"
+	ImageDitherFloydSteinberg ImageDither = "floyd-steinberg"
+	ImageDitherNone           ImageDither = "none"
+	ImageDitherOrdered        ImageDither = "ordered"
 )
 
 // Valid indicates whether the value is a known member of the ImageDither enum.
 func (e ImageDither) Valid() bool {
 	switch e {
-	case FloydSteinberg:
+	case ImageDitherAtkinson:
 		return true
-	case None:
+	case ImageDitherFloydSteinberg:
+		return true
+	case ImageDitherNone:
+		return true
+	case ImageDitherOrdered:
 		return true
 	default:
 		return false
@@ -197,6 +242,52 @@ func (e RenderStatus) Valid() bool {
 	}
 }
 
+// Defines values for ScreenKind.
+const (
+	ScreenKindImage    ScreenKind = "image"
+	ScreenKindTemplate ScreenKind = "template"
+)
+
+// Valid indicates whether the value is a known member of the ScreenKind enum.
+func (e ScreenKind) Valid() bool {
+	switch e {
+	case ScreenKindImage:
+		return true
+	case ScreenKindTemplate:
+		return true
+	default:
+		return false
+	}
+}
+
+// Asset defines model for Asset.
+type Asset struct {
+	CreatedAt time.Time `json:"created_at"`
+	Height    int       `json:"height"`
+	Id        int64     `json:"id"`
+	Name      string    `json:"name"`
+	Size      int64     `json:"size"`
+
+	// Url The original upload (for thumbnails).
+	Url   string `json:"url"`
+	Width int    `json:"width"`
+}
+
+// Background defines model for Background.
+type Background struct {
+	AssetIds *[]int64         `json:"asset_ids,omitempty"`
+	Dither   *ImageDither     `json:"dither,omitempty"`
+	Fit      *ImageFit        `json:"fit,omitempty"`
+	Kind     BackgroundKind   `json:"kind"`
+	Order    *BackgroundOrder `json:"order,omitempty"`
+}
+
+// BackgroundKind defines model for Background.Kind.
+type BackgroundKind string
+
+// BackgroundOrder defines model for Background.Order.
+type BackgroundOrder string
+
 // Device defines model for Device.
 type Device struct {
 	ApiKey     string     `json:"api_key"`
@@ -208,14 +299,11 @@ type Device struct {
 	FirmwareVersion  *string    `json:"firmware_version,omitempty"`
 
 	// FriendlyId Example: K7Q2XM
-	FriendlyId string `json:"friendly_id"`
-	Id         int64  `json:"id"`
-
-	// ImageFilename Static image, shown when the device has no playlist; null = placeholder.
-	ImageFilename *string    `json:"image_filename,omitempty"`
-	Label         string     `json:"label"`
-	LastSeenAt    *time.Time `json:"last_seen_at,omitempty"`
-	Latest        *Telemetry `json:"latest,omitempty"`
+	FriendlyId string     `json:"friendly_id"`
+	Id         int64      `json:"id"`
+	Label      string     `json:"label"`
+	LastSeenAt *time.Time `json:"last_seen_at,omitempty"`
+	Latest     *Telemetry `json:"latest,omitempty"`
 
 	// Mac Example: AA:BB:CC:DD:EE:FF
 	Mac        string `json:"mac"`
@@ -328,6 +416,23 @@ type ImageDither string
 // ImageFit defines model for ImageFit.
 type ImageFit string
 
+// Layout defines model for Layout.
+type Layout struct {
+	// Key Example: 1Lx2R
+	Key  string `json:"key"`
+	Name string `json:"name"`
+
+	// Slots Empty for the free layout.
+	Slots []struct {
+		H    float32 `json:"h"`
+		Key  string  `json:"key"`
+		View string  `json:"view"`
+		W    float32 `json:"w"`
+		X    float32 `json:"x"`
+		Y    float32 `json:"y"`
+	} `json:"slots"`
+}
+
 // Playlist defines model for Playlist.
 type Playlist struct {
 	DeviceCount int            `json:"device_count"`
@@ -393,9 +498,13 @@ type Region struct {
 	// Key Example: main
 	Key      string `json:"key"`
 	Template string `json:"template"`
-	W        int    `json:"w"`
-	X        int    `json:"x"`
-	Y        int    `json:"y"`
+
+	// Transparent Let the screen background show through this region.
+	Transparent bool `json:"transparent"`
+	W           int  `json:"w"`
+	X           int  `json:"x"`
+	Y           int  `json:"y"`
+	Z           int  `json:"z"`
 }
 
 // Render defines model for Render.
@@ -416,15 +525,20 @@ type RenderStatus string
 
 // Screen defines model for Screen.
 type Screen struct {
-	FrameworkVersion string `json:"framework_version"`
+	Background       Background `json:"background"`
+	FrameworkVersion string     `json:"framework_version"`
 
 	// Head Extra HTML for the page head (styles).
 	Head string `json:"head"`
 	Id   int64  `json:"id"`
 
+	// Kind template = HTML regions rendered by the browser; image = just the background.
+	Kind ScreenKind `json:"kind"`
+
 	// LatestImage Filename of the newest successful render.
 	LatestImage    *string   `json:"latest_image,omitempty"`
 	LatestRender   *Render   `json:"latest_render,omitempty"`
+	Layout         string    `json:"layout"`
 	ModelId        int64     `json:"model_id"`
 	Name           string    `json:"name"`
 	Regions        []Region  `json:"regions"`
@@ -434,17 +548,26 @@ type Screen struct {
 
 // ScreenCreate defines model for ScreenCreate.
 type ScreenCreate struct {
-	ModelId int64  `json:"model_id"`
-	Name    string `json:"name"`
+	// Kind template = HTML regions rendered by the browser; image = just the background.
+	Kind    *ScreenKind `json:"kind,omitempty"`
+	ModelId int64       `json:"model_id"`
+	Name    string      `json:"name"`
 }
+
+// ScreenKind template = HTML regions rendered by the browser; image = just the background.
+type ScreenKind string
 
 // ScreenSummary defines model for ScreenSummary.
 type ScreenSummary struct {
 	Id int64 `json:"id"`
 
+	// Kind template = HTML regions rendered by the browser; image = just the background.
+	Kind ScreenKind `json:"kind"`
+
 	// LatestImage Filename of the newest successful render.
 	LatestImage    *string   `json:"latest_image,omitempty"`
 	LatestRender   *Render   `json:"latest_render,omitempty"`
+	Layout         string    `json:"layout"`
 	ModelId        int64     `json:"model_id"`
 	Name           string    `json:"name"`
 	RenderInterval int       `json:"render_interval"`
@@ -453,12 +576,27 @@ type ScreenSummary struct {
 
 // ScreenUpdate defines model for ScreenUpdate.
 type ScreenUpdate struct {
-	Head    string `json:"head"`
+	Background Background `json:"background"`
+	Head       string     `json:"head"`
+
+	// Layout A layout key from /system layouts. Changing it adds or removes regions.
+	Layout  string `json:"layout"`
 	ModelId int64  `json:"model_id"`
 	Name    string `json:"name"`
+
+	// Regions Region contents. For preset layouts regions are matched by id (or key) and their
+	// rectangles come from the layout; for the free layout the list defines the regions
+	// (omit id for new ones).
 	Regions []struct {
-		Id       int64  `json:"id"`
-		Template string `json:"template"`
+		H           *int   `json:"h,omitempty"`
+		Id          *int64 `json:"id,omitempty"`
+		Key         string `json:"key"`
+		Template    string `json:"template"`
+		Transparent *bool  `json:"transparent,omitempty"`
+		W           *int   `json:"w,omitempty"`
+		X           *int   `json:"x,omitempty"`
+		Y           *int   `json:"y,omitempty"`
+		Z           *int   `json:"z,omitempty"`
 	} `json:"regions"`
 	RenderInterval int `json:"render_interval"`
 }
@@ -469,7 +607,8 @@ type SystemInfo struct {
 	DevicePublicUrl string `json:"device_public_url"`
 
 	// FrameworkVersion Example: 3.4.4
-	FrameworkVersion string `json:"framework_version"`
+	FrameworkVersion string   `json:"framework_version"`
+	Layouts          []Layout `json:"layouts"`
 
 	// TemplateFunctions Helper functions available in screen templates.
 	TemplateFunctions []string `json:"template_functions"`
@@ -526,6 +665,9 @@ type ToneCurve struct {
 	White float32 `json:"white"`
 }
 
+// AssetID defines model for AssetID.
+type AssetID = int64
+
 // DeviceID defines model for DeviceID.
 type DeviceID = int64
 
@@ -541,13 +683,19 @@ type PlaylistID = int64
 // ScreenID defines model for ScreenID.
 type ScreenID = int64
 
-// SetDeviceImageMultipartBody defines parameters for SetDeviceImage.
-type SetDeviceImageMultipartBody struct {
-	Dither *ImageDither `json:"dither,omitempty"`
-
-	// File PNG, JPEG or GIF
+// UploadAssetMultipartBody defines parameters for UploadAsset.
+type UploadAssetMultipartBody struct {
 	File openapi_types.File `json:"file"`
-	Fit  *ImageFit          `json:"fit,omitempty"`
+
+	// Name Defaults to the file name.
+	Name *string `json:"name,omitempty"`
+}
+
+// PreviewAssetJSONBody defines parameters for PreviewAsset.
+type PreviewAssetJSONBody struct {
+	Dither  *ImageDither `json:"dither,omitempty"`
+	Fit     *ImageFit    `json:"fit,omitempty"`
+	ModelId int64        `json:"model_id"`
 }
 
 // ListDeviceLogsParams defines parameters for ListDeviceLogs.
@@ -575,6 +723,12 @@ type ListDeviceTelemetryParams struct {
 	Limit    *Limit `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// UploadAssetMultipartRequestBody defines body for UploadAsset for multipart/form-data ContentType.
+type UploadAssetMultipartRequestBody UploadAssetMultipartBody
+
+// PreviewAssetJSONRequestBody defines body for PreviewAsset for application/json ContentType.
+type PreviewAssetJSONRequestBody PreviewAssetJSONBody
+
 // SetToneCurveJSONRequestBody defines body for SetToneCurve for application/json ContentType.
 type SetToneCurveJSONRequestBody = ToneCurve
 
@@ -583,9 +737,6 @@ type PreviewToneCurveJSONRequestBody = ToneCurve
 
 // UpdateDeviceJSONRequestBody defines body for UpdateDevice for application/json ContentType.
 type UpdateDeviceJSONRequestBody = DeviceUpdate
-
-// SetDeviceImageMultipartRequestBody defines body for SetDeviceImage for multipart/form-data ContentType.
-type SetDeviceImageMultipartRequestBody SetDeviceImageMultipartBody
 
 // SetDevicePlaylistJSONRequestBody defines body for SetDevicePlaylist for application/json ContentType.
 type SetDevicePlaylistJSONRequestBody SetDevicePlaylistJSONBody
@@ -607,6 +758,18 @@ type PreviewScreenJSONRequestBody = PreviewRequest
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+
+	// (GET /assets)
+	ListAssets(w http.ResponseWriter, r *http.Request)
+	// UploadAsset Upload an image (PNG, JPEG or GIF); identical files are stored once
+	// (POST /assets)
+	UploadAsset(w http.ResponseWriter, r *http.Request)
+
+	// (DELETE /assets/{id})
+	DeleteAsset(w http.ResponseWriter, r *http.Request, id AssetID)
+	// PreviewAsset Show an image as a device model would display it
+	// (POST /assets/{id}/preview)
+	PreviewAsset(w http.ResponseWriter, r *http.Request, id AssetID)
 
 	// (GET /device-models)
 	ListDeviceModels(w http.ResponseWriter, r *http.Request)
@@ -640,12 +803,6 @@ type ServerInterface interface {
 
 	// (POST /devices/{id}/disable)
 	DisableDevice(w http.ResponseWriter, r *http.Request, id DeviceID)
-
-	// (DELETE /devices/{id}/image)
-	ClearDeviceImage(w http.ResponseWriter, r *http.Request, id DeviceID)
-	// SetDeviceImage Upload a static image for the device (until screens exist)
-	// (PUT /devices/{id}/image)
-	SetDeviceImage(w http.ResponseWriter, r *http.Request, id DeviceID)
 	// ListDeviceLogs Device logs, newest first
 	// (GET /devices/{id}/logs)
 	ListDeviceLogs(w http.ResponseWriter, r *http.Request, id DeviceID, params ListDeviceLogsParams)
@@ -710,6 +867,86 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// ListAssets operation middleware
+func (siw *ServerInterfaceWrapper) ListAssets(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAssets(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UploadAsset operation middleware
+func (siw *ServerInterfaceWrapper) UploadAsset(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UploadAsset(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteAsset operation middleware
+func (siw *ServerInterfaceWrapper) DeleteAsset(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id AssetID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteAsset(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PreviewAsset operation middleware
+func (siw *ServerInterfaceWrapper) PreviewAsset(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id AssetID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PreviewAsset(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // ListDeviceModels operation middleware
 func (siw *ServerInterfaceWrapper) ListDeviceModels(w http.ResponseWriter, r *http.Request) {
@@ -964,58 +1201,6 @@ func (siw *ServerInterfaceWrapper) DisableDevice(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DisableDevice(w, r, id)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ClearDeviceImage operation middleware
-func (siw *ServerInterfaceWrapper) ClearDeviceImage(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "id" -------------
-	var id DeviceID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ClearDeviceImage(w, r, id)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// SetDeviceImage operation middleware
-func (siw *ServerInterfaceWrapper) SetDeviceImage(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "id" -------------
-	var id DeviceID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.SetDeviceImage(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1647,8 +1832,6 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/devices/{id}", wrapper.UpdateDevice)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/devices/{id}/approve", wrapper.ApproveDevice)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/devices/{id}/disable", wrapper.DisableDevice)
-	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/devices/{id}/image", wrapper.ClearDeviceImage)
-	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/devices/{id}/image", wrapper.SetDeviceImage)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/devices/{id}/logs", wrapper.ListDeviceLogs)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/devices/{id}/telemetry", wrapper.ListDeviceTelemetry)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/devices/{id}/playlist", wrapper.SetDevicePlaylist)
@@ -1669,6 +1852,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/playlists/{id}", wrapper.DeletePlaylist)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/playlists/{id}", wrapper.GetPlaylist)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/playlists/{id}", wrapper.UpdatePlaylist)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/assets", wrapper.ListAssets)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/assets", wrapper.UploadAsset)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/assets/{id}", wrapper.DeleteAsset)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/assets/{id}/preview", wrapper.PreviewAsset)
 
 	return m
 }
@@ -1680,6 +1867,153 @@ type PlaylistJSONResponse Playlist
 type ProblemApplicationProblemPlusJSONResponse Problem
 
 type ScreenJSONResponse Screen
+
+type ListAssetsRequestObject struct {
+}
+
+type ListAssetsResponseObject interface {
+	VisitListAssetsResponse(w http.ResponseWriter) error
+}
+
+type ListAssets200JSONResponse []Asset
+
+func (response ListAssets200JSONResponse) VisitListAssetsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadAssetRequestObject struct {
+	Body *multipart.Reader
+}
+
+type UploadAssetResponseObject interface {
+	VisitUploadAssetResponse(w http.ResponseWriter) error
+}
+
+type UploadAsset201JSONResponse Asset
+
+func (response UploadAsset201JSONResponse) VisitUploadAssetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadAsset422ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response UploadAsset422ApplicationProblemPlusJSONResponse) VisitUploadAssetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteAssetRequestObject struct {
+	Id AssetID `json:"id"`
+}
+
+type DeleteAssetResponseObject interface {
+	VisitDeleteAssetResponse(w http.ResponseWriter) error
+}
+
+type DeleteAsset204Response struct {
+}
+
+func (response DeleteAsset204Response) VisitDeleteAssetResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteAsset404ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteAsset404ApplicationProblemPlusJSONResponse) VisitDeleteAssetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteAsset409ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteAsset409ApplicationProblemPlusJSONResponse) VisitDeleteAssetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewAssetRequestObject struct {
+	Id   AssetID `json:"id"`
+	Body *PreviewAssetJSONRequestBody
+}
+
+type PreviewAssetResponseObject interface {
+	VisitPreviewAssetResponse(w http.ResponseWriter) error
+}
+
+type PreviewAsset200JSONResponse struct {
+	// Device data:image/png;base64 URL
+	Device string `json:"device"`
+}
+
+func (response PreviewAsset200JSONResponse) VisitPreviewAssetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewAsset404ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response PreviewAsset404ApplicationProblemPlusJSONResponse) VisitPreviewAssetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
 
 type ListDeviceModelsRequestObject struct {
 }
@@ -2142,97 +2476,6 @@ func (response DisableDevice404ApplicationProblemPlusJSONResponse) VisitDisableD
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(404)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type ClearDeviceImageRequestObject struct {
-	Id DeviceID `json:"id"`
-}
-
-type ClearDeviceImageResponseObject interface {
-	VisitClearDeviceImageResponse(w http.ResponseWriter) error
-}
-
-type ClearDeviceImage200JSONResponse struct{ DeviceJSONResponse }
-
-func (response ClearDeviceImage200JSONResponse) VisitClearDeviceImageResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type ClearDeviceImage404ApplicationProblemPlusJSONResponse struct {
-	ProblemApplicationProblemPlusJSONResponse
-}
-
-func (response ClearDeviceImage404ApplicationProblemPlusJSONResponse) VisitClearDeviceImageResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(404)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type SetDeviceImageRequestObject struct {
-	Id   DeviceID `json:"id"`
-	Body *multipart.Reader
-}
-
-type SetDeviceImageResponseObject interface {
-	VisitSetDeviceImageResponse(w http.ResponseWriter) error
-}
-
-type SetDeviceImage200JSONResponse struct{ DeviceJSONResponse }
-
-func (response SetDeviceImage200JSONResponse) VisitSetDeviceImageResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type SetDeviceImage404ApplicationProblemPlusJSONResponse struct {
-	ProblemApplicationProblemPlusJSONResponse
-}
-
-func (response SetDeviceImage404ApplicationProblemPlusJSONResponse) VisitSetDeviceImageResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(404)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type SetDeviceImage422ApplicationProblemPlusJSONResponse Problem
-
-func (response SetDeviceImage422ApplicationProblemPlusJSONResponse) VisitSetDeviceImageResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(422)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -2920,6 +3163,18 @@ func (response GetSystem200JSONResponse) VisitGetSystemResponse(w http.ResponseW
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 
+	// (GET /assets)
+	ListAssets(ctx context.Context, request ListAssetsRequestObject) (ListAssetsResponseObject, error)
+	// UploadAsset Upload an image (PNG, JPEG or GIF); identical files are stored once
+	// (POST /assets)
+	UploadAsset(ctx context.Context, request UploadAssetRequestObject) (UploadAssetResponseObject, error)
+
+	// (DELETE /assets/{id})
+	DeleteAsset(ctx context.Context, request DeleteAssetRequestObject) (DeleteAssetResponseObject, error)
+	// PreviewAsset Show an image as a device model would display it
+	// (POST /assets/{id}/preview)
+	PreviewAsset(ctx context.Context, request PreviewAssetRequestObject) (PreviewAssetResponseObject, error)
+
 	// (GET /device-models)
 	ListDeviceModels(ctx context.Context, request ListDeviceModelsRequestObject) (ListDeviceModelsResponseObject, error)
 	// SetToneCurve Save a model's gray tone curve; its screens re-render
@@ -2952,12 +3207,6 @@ type StrictServerInterface interface {
 
 	// (POST /devices/{id}/disable)
 	DisableDevice(ctx context.Context, request DisableDeviceRequestObject) (DisableDeviceResponseObject, error)
-
-	// (DELETE /devices/{id}/image)
-	ClearDeviceImage(ctx context.Context, request ClearDeviceImageRequestObject) (ClearDeviceImageResponseObject, error)
-	// SetDeviceImage Upload a static image for the device (until screens exist)
-	// (PUT /devices/{id}/image)
-	SetDeviceImage(ctx context.Context, request SetDeviceImageRequestObject) (SetDeviceImageResponseObject, error)
 	// ListDeviceLogs Device logs, newest first
 	// (GET /devices/{id}/logs)
 	ListDeviceLogs(ctx context.Context, request ListDeviceLogsRequestObject) (ListDeviceLogsResponseObject, error)
@@ -3051,6 +3300,120 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// ListAssets operation middleware
+func (sh *strictHandler) ListAssets(w http.ResponseWriter, r *http.Request) {
+	var request ListAssetsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListAssets(ctx, request.(ListAssetsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListAssets")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListAssetsResponseObject); ok {
+		if err := validResponse.VisitListAssetsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UploadAsset operation middleware
+func (sh *strictHandler) UploadAsset(w http.ResponseWriter, r *http.Request) {
+	var request UploadAssetRequestObject
+
+	if reader, err := r.MultipartReader(); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode multipart body: %w", err))
+		return
+	} else {
+		request.Body = reader
+	}
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UploadAsset(ctx, request.(UploadAssetRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UploadAsset")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UploadAssetResponseObject); ok {
+		if err := validResponse.VisitUploadAssetResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteAsset operation middleware
+func (sh *strictHandler) DeleteAsset(w http.ResponseWriter, r *http.Request, id AssetID) {
+	var request DeleteAssetRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteAsset(ctx, request.(DeleteAssetRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteAsset")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteAssetResponseObject); ok {
+		if err := validResponse.VisitDeleteAssetResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PreviewAsset operation middleware
+func (sh *strictHandler) PreviewAsset(w http.ResponseWriter, r *http.Request, id AssetID) {
+	var request PreviewAssetRequestObject
+
+	request.Id = id
+
+	var body PreviewAssetJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PreviewAsset(ctx, request.(PreviewAssetRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PreviewAsset")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PreviewAssetResponseObject); ok {
+		if err := validResponse.VisitPreviewAssetResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // ListDeviceModels operation middleware
@@ -3349,65 +3712,6 @@ func (sh *strictHandler) DisableDevice(w http.ResponseWriter, r *http.Request, i
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(DisableDeviceResponseObject); ok {
 		if err := validResponse.VisitDisableDeviceResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// ClearDeviceImage operation middleware
-func (sh *strictHandler) ClearDeviceImage(w http.ResponseWriter, r *http.Request, id DeviceID) {
-	var request ClearDeviceImageRequestObject
-
-	request.Id = id
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.ClearDeviceImage(ctx, request.(ClearDeviceImageRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "ClearDeviceImage")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(ClearDeviceImageResponseObject); ok {
-		if err := validResponse.VisitClearDeviceImageResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// SetDeviceImage operation middleware
-func (sh *strictHandler) SetDeviceImage(w http.ResponseWriter, r *http.Request, id DeviceID) {
-	var request SetDeviceImageRequestObject
-
-	request.Id = id
-
-	if reader, err := r.MultipartReader(); err != nil {
-		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode multipart body: %w", err))
-		return
-	} else {
-		request.Body = reader
-	}
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.SetDeviceImage(ctx, request.(SetDeviceImageRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "SetDeviceImage")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(SetDeviceImageResponseObject); ok {
-		if err := validResponse.VisitSetDeviceImageResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -3923,75 +4227,86 @@ func (sh *strictHandler) GetSystem(w http.ResponseWriter, r *http.Request) {
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

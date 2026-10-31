@@ -28,6 +28,16 @@ func (c Config) DatabasePath() string {
 	return filepath.Join(c.DataDir, "cnsl.db")
 }
 
+// UploadsDir holds original uploaded images (assets).
+func (c Config) UploadsDir() string {
+	return filepath.Join(c.DataDir, "uploads")
+}
+
+// CacheDir holds processed image variants; safe to delete.
+func (c Config) CacheDir() string {
+	return filepath.Join(c.DataDir, "cache")
+}
+
 // ImagesDir holds rendered device images.
 func (c Config) ImagesDir() string {
 	return filepath.Join(c.DataDir, "images")

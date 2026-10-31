@@ -20,7 +20,6 @@ func toDevice(d store.Device, latest *store.Telemetry) gen.Device {
 		RefreshRate:      d.RefreshRate,
 		SleepStart:       nullString(d.SleepStart),
 		SleepEnd:         nullString(d.SleepEnd),
-		ImageFilename:    nullString(d.ImageFilename),
 		PlaylistId:       nullInt64(d.PlaylistID),
 		CalibratingUntil: d.CalibratingUntil.Ptr(),
 		FirmwareVersion:  nullString(d.FirmwareVersion),

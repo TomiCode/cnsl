@@ -20,7 +20,18 @@ type Dither string
 const (
 	DitherNone           Dither = "none"
 	DitherFloydSteinberg Dither = "floyd-steinberg"
+	DitherAtkinson       Dither = "atkinson" // lighter, higher-contrast; good for 1–2 bit
+	DitherOrdered        Dither = "ordered"  // Bayer 8×8; stable between renders (slideshows)
 )
+
+// ValidDither reports whether d is a known dithering method.
+func ValidDither(d Dither) bool {
+	switch d {
+	case DitherNone, DitherFloydSteinberg, DitherAtkinson, DitherOrdered:
+		return true
+	}
+	return false
+}
 
 // Gray converts any image to 8-bit grayscale (luma). Transparent areas become white.
 func Gray(src image.Image) *image.Gray {
@@ -129,37 +140,72 @@ func Quantize(src *image.Gray, bitDepth int, dither Dither) *image.Gray {
 	step := 255.0 / float64(levels-1)
 	w, h := src.Bounds().Dx(), src.Bounds().Dy()
 	out := image.NewGray(image.Rect(0, 0, w, h))
-
 	nearest := func(v float64) int {
 		return min(max(int(v/step+0.5), 0), levels-1)
 	}
+	at := func(x, y int) float64 { return float64(src.Pix[y*src.Stride+x]) }
 
-	if dither != DitherFloydSteinberg {
+	switch dither {
+	case DitherFloydSteinberg:
+		diffuse(out, w, h, at, nearest, step, floydSteinberg)
+	case DitherAtkinson:
+		diffuse(out, w, h, at, nearest, step, atkinson)
+	case DitherOrdered:
 		for y := range h {
 			for x := range w {
-				out.Pix[y*out.Stride+x] = uint8(nearest(float64(src.Pix[y*src.Stride+x])))
+				t := (float64(bayer8[y%8][x%8])+0.5)/64 - 0.5 // −0.5 … 0.5 of a step
+				out.Pix[y*out.Stride+x] = uint8(nearest(at(x, y) + t*step))
 			}
 		}
-		return out
+	default:
+		for y := range h {
+			for x := range w {
+				out.Pix[y*out.Stride+x] = uint8(nearest(at(x, y)))
+			}
+		}
 	}
+	return out
+}
 
-	// Floyd–Steinberg error diffusion with two rolling rows of accumulated error.
-	cur, next := make([]float64, w+2), make([]float64, w+2)
+// kernel lists error-diffusion targets as (dx, dy, weight).
+type kernel struct {
+	taps    [][3]int
+	divisor float64
+}
+
+var (
+	floydSteinberg = kernel{taps: [][3]int{{1, 0, 7}, {-1, 1, 3}, {0, 1, 5}, {1, 1, 1}}, divisor: 16}
+	// Atkinson spreads only 6/8 of the error, which keeps highlights and shadows clean.
+	atkinson = kernel{taps: [][3]int{{1, 0, 1}, {2, 0, 1}, {-1, 1, 1}, {0, 1, 1}, {1, 1, 1}, {0, 2, 1}}, divisor: 8}
+)
+
+func diffuse(out *image.Gray, w, h int, at func(x, y int) float64, nearest func(float64) int, step float64, k kernel) {
+	const pad = 2
+	rows := [3][]float64{make([]float64, w+2*pad), make([]float64, w+2*pad), make([]float64, w+2*pad)}
 	for y := range h {
 		for x := range w {
-			v := float64(src.Pix[y*src.Stride+x]) + cur[x+1]
+			v := at(x, y) + rows[0][x+pad]
 			level := nearest(v)
 			out.Pix[y*out.Stride+x] = uint8(level)
 			e := v - float64(level)*step
-			cur[x+2] += e * 7 / 16
-			next[x] += e * 3 / 16
-			next[x+1] += e * 5 / 16
-			next[x+2] += e * 1 / 16
+			for _, t := range k.taps {
+				rows[t[1]][x+pad+t[0]] += e * float64(t[2]) / k.divisor
+			}
 		}
-		cur, next = next, cur
-		clear(next)
+		rows[0], rows[1], rows[2] = rows[1], rows[2], rows[0]
+		clear(rows[2])
 	}
-	return out
+}
+
+var bayer8 = [8][8]int{
+	{0, 32, 8, 40, 2, 34, 10, 42},
+	{48, 16, 56, 24, 50, 18, 58, 26},
+	{12, 44, 4, 36, 14, 46, 6, 38},
+	{60, 28, 52, 20, 62, 30, 54, 22},
+	{3, 35, 11, 43, 1, 33, 9, 41},
+	{51, 19, 59, 27, 49, 17, 57, 25},
+	{15, 47, 7, 39, 13, 45, 5, 37},
+	{63, 31, 55, 23, 61, 29, 53, 21},
 }
 
 // Expand turns level indexes back into 8-bit gray, e.g. for previews.

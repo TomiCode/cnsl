@@ -3,22 +3,13 @@ package dashboard
 import (
 	"context"
 	"errors"
-	"fmt"
-	"image"
-	_ "image/gif" // registered decoders for uploads
-	_ "image/jpeg"
-	_ "image/png"
-	"io"
 	"net/http"
 	"strings"
 
 	"github.com/TomiCode/cnsl/internal/dashboard/gen"
 	"github.com/TomiCode/cnsl/internal/device"
-	"github.com/TomiCode/cnsl/internal/imaging"
 	"github.com/TomiCode/cnsl/internal/store"
 )
-
-const maxUploadBytes = 25 << 20
 
 func (s *Server) ListDeviceModels(ctx context.Context, _ gen.ListDeviceModelsRequestObject) (gen.ListDeviceModelsResponseObject, error) {
 	models, err := s.store.DeviceModels(ctx)
@@ -133,74 +124,6 @@ func (s *Server) DisableDevice(ctx context.Context, req gen.DisableDeviceRequest
 	}
 	resp, err := s.deviceResponse(ctx, d)
 	return gen.DisableDevice200JSONResponse{DeviceJSONResponse: resp}, err
-}
-
-func (s *Server) SetDeviceImage(ctx context.Context, req gen.SetDeviceImageRequestObject) (gen.SetDeviceImageResponseObject, error) {
-	invalid := func(format string, args ...any) gen.SetDeviceImageResponseObject {
-		return gen.SetDeviceImage422ApplicationProblemPlusJSONResponse(invalidProblem(fmt.Errorf(format, args...)))
-	}
-
-	var (
-		img    image.Image
-		fit    = imaging.FitContain
-		dither = imaging.DitherFloydSteinberg
-	)
-	for {
-		part, err := req.Body.NextPart()
-		if errors.Is(err, io.EOF) {
-			break
-		}
-		if err != nil {
-			return invalid("read upload: %v", err), nil
-		}
-		switch part.FormName() {
-		case "file":
-			img, _, err = image.Decode(io.LimitReader(part, maxUploadBytes))
-			if err != nil {
-				return invalid("unsupported or broken image (PNG, JPEG or GIF): %v", err), nil
-			}
-		case "fit":
-			v, _ := io.ReadAll(io.LimitReader(part, 64))
-			fit = imaging.Fit(strings.TrimSpace(string(v)))
-		case "dither":
-			v, _ := io.ReadAll(io.LimitReader(part, 64))
-			dither = imaging.Dither(strings.TrimSpace(string(v)))
-		}
-		part.Close()
-	}
-	if img == nil {
-		return invalid("missing file"), nil
-	}
-	if fit != imaging.FitContain && fit != imaging.FitCover {
-		return invalid("fit must be contain or cover"), nil
-	}
-	if dither != imaging.DitherNone && dither != imaging.DitherFloydSteinberg {
-		return invalid("dither must be none or floyd-steinberg"), nil
-	}
-
-	d, err := s.devices.SetImage(ctx, req.Id, img, fit, dither)
-	switch {
-	case errors.Is(err, store.ErrNotFound):
-		return gen.SetDeviceImage404ApplicationProblemPlusJSONResponse{ProblemApplicationProblemPlusJSONResponse: notFoundProblem("device")}, nil
-	case errors.Is(err, device.ErrInvalid):
-		return gen.SetDeviceImage422ApplicationProblemPlusJSONResponse(invalidProblem(err)), nil
-	case err != nil:
-		return nil, err
-	}
-	resp, err := s.deviceResponse(ctx, d)
-	return gen.SetDeviceImage200JSONResponse{DeviceJSONResponse: resp}, err
-}
-
-func (s *Server) ClearDeviceImage(ctx context.Context, req gen.ClearDeviceImageRequestObject) (gen.ClearDeviceImageResponseObject, error) {
-	d, err := s.devices.ClearImage(ctx, req.Id)
-	if errors.Is(err, store.ErrNotFound) {
-		return gen.ClearDeviceImage404ApplicationProblemPlusJSONResponse{ProblemApplicationProblemPlusJSONResponse: notFoundProblem("device")}, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	resp, err := s.deviceResponse(ctx, d)
-	return gen.ClearDeviceImage200JSONResponse{DeviceJSONResponse: resp}, err
 }
 
 func (s *Server) ListDeviceLogs(ctx context.Context, req gen.ListDeviceLogsRequestObject) (gen.ListDeviceLogsResponseObject, error) {

@@ -46,7 +46,6 @@ type Device struct {
 	RefreshRate      int            `db:"refresh_rate"`
 	SleepStart       sql.NullString `db:"sleep_start"`
 	SleepEnd         sql.NullString `db:"sleep_end"`
-	ImageFilename    sql.NullString `db:"image_filename"`
 	FirmwareVersion  sql.NullString `db:"firmware_version"`
 	ReportedModel    sql.NullString `db:"reported_model"`
 	ReportedWidth    sql.NullInt64  `db:"reported_width"`
@@ -123,7 +122,7 @@ func (s *Store) UpdateDevice(ctx context.Context, d *Device) error {
 	res, err := s.DB.NamedExecContext(ctx, `
 		UPDATE devices SET
 			mac = :mac, label = :label, status = :status, model_id = :model_id, refresh_rate = :refresh_rate,
-			sleep_start = :sleep_start, sleep_end = :sleep_end, image_filename = :image_filename,
+			sleep_start = :sleep_start, sleep_end = :sleep_end,
 			firmware_version = :firmware_version, reported_model = :reported_model,
 			reported_width = :reported_width, reported_height = :reported_height,
 			last_seen_at = :last_seen_at, approved_at = :approved_at, updated_at = :updated_at,
@@ -141,13 +140,6 @@ func (s *Store) DeleteDevice(ctx context.Context, id int64) error {
 		return err
 	}
 	return affected(res)
-}
-
-// ImageInUse reports whether any device still points at the image file.
-func (s *Store) ImageInUse(ctx context.Context, filename string) (bool, error) {
-	var n int
-	err := s.DB.GetContext(ctx, &n, `SELECT COUNT(*) FROM devices WHERE image_filename = ?`, filename)
-	return n > 0, err
 }
 
 // Telemetry is one /api/display request's worth of device state.

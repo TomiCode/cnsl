@@ -149,25 +149,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/devices/{id}/image": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["DeviceID"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        /** Upload a static image for the device (until screens exist) */
-        put: operations["setDeviceImage"];
-        post?: never;
-        delete: operations["clearDeviceImage"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/devices/{id}/logs": {
         parameters: {
             query?: never;
@@ -392,6 +373,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/assets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAssets"];
+        put?: never;
+        /** Upload an image (PNG, JPEG or GIF); identical files are stored once */
+        post: operations["uploadAsset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assets/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["AssetID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteAsset"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assets/{id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["AssetID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Show an image as a device model would display it */
+        post: operations["previewAsset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -410,6 +445,7 @@ export interface components {
             framework_version: string;
             /** @description Helper functions available in screen templates. */
             template_functions: string[];
+            layouts: components["schemas"]["Layout"][];
             /** @example Europe/Vienna */
             timezone: string;
             /** @description Base URL devices use to reach the device listener; empty if not configured. */
@@ -459,8 +495,6 @@ export interface components {
             sleep_start?: string | null;
             /** @example 06:00 */
             sleep_end?: string | null;
-            /** @description Static image, shown when the device has no playlist; null = placeholder. */
-            image_filename?: string | null;
             /** Format: int64 */
             playlist_id?: number | null;
             /**
@@ -493,7 +527,7 @@ export interface components {
             sleep_end?: string;
         };
         /**
-         * @default contain
+         * @default cover
          * @enum {string}
          */
         ImageFit: "contain" | "cover";
@@ -501,7 +535,7 @@ export interface components {
          * @default floyd-steinberg
          * @enum {string}
          */
-        ImageDither: "none" | "floyd-steinberg";
+        ImageDither: "none" | "floyd-steinberg" | "atkinson" | "ordered";
         Telemetry: {
             /** Format: int64 */
             id: number;
@@ -563,6 +597,9 @@ export interface components {
             y: number;
             w: number;
             h: number;
+            z: number;
+            /** @description Let the screen background show through this region. */
+            transparent: boolean;
             template: string;
         };
         Render: {
@@ -579,10 +616,43 @@ export interface components {
             /** Format: date-time */
             created_at: string;
         };
+        /**
+         * @description template = HTML regions rendered by the browser; image = just the background.
+         * @enum {string}
+         */
+        ScreenKind: "template" | "image";
+        Background: {
+            /** @enum {string} */
+            kind: "none" | "image" | "slideshow";
+            asset_ids?: number[];
+            fit?: components["schemas"]["ImageFit"];
+            dither?: components["schemas"]["ImageDither"];
+            /**
+             * @default sequential
+             * @enum {string}
+             */
+            order: "sequential" | "shuffle";
+        };
+        Layout: {
+            /** @example 1Lx2R */
+            key: string;
+            name: string;
+            /** @description Empty for the free layout. */
+            slots: {
+                key: string;
+                view: string;
+                x: number;
+                y: number;
+                w: number;
+                h: number;
+            }[];
+        };
         ScreenSummary: {
             /** Format: int64 */
             id: number;
             name: string;
+            kind: components["schemas"]["ScreenKind"];
+            layout: string;
             /** Format: int64 */
             model_id: number;
             render_interval: number;
@@ -594,6 +664,7 @@ export interface components {
         };
         Screen: components["schemas"]["ScreenSummary"] & {
             framework_version: string;
+            background: components["schemas"]["Background"];
             /** @description Extra HTML for the page head (styles). */
             head: string;
             regions: components["schemas"]["Region"][];
@@ -602,6 +673,7 @@ export interface components {
             name: string;
             /** Format: int64 */
             model_id: number;
+            kind?: components["schemas"]["ScreenKind"];
         };
         ScreenUpdate: {
             name: string;
@@ -609,10 +681,25 @@ export interface components {
             model_id: number;
             head: string;
             render_interval: number;
+            /** @description A layout key from /system layouts. Changing it adds or removes regions. */
+            layout: string;
+            background: components["schemas"]["Background"];
+            /**
+             * @description Region contents. For preset layouts regions are matched by id (or key) and their
+             *     rectangles come from the layout; for the free layout the list defines the regions
+             *     (omit id for new ones).
+             */
             regions: {
                 /** Format: int64 */
-                id: number;
+                id?: number;
+                key: string;
                 template: string;
+                transparent?: boolean;
+                x?: number;
+                y?: number;
+                w?: number;
+                h?: number;
+                z?: number;
             }[];
         };
         PreviewRequest: {
@@ -666,6 +753,19 @@ export interface components {
         PlaylistInput: {
             name: string;
             items: components["schemas"]["PlaylistItem"][];
+        };
+        Asset: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            /** @description The original upload (for thumbnails). */
+            url: string;
+            width: number;
+            height: number;
+            /** Format: int64 */
+            size: number;
+            /** Format: date-time */
+            created_at: string;
         };
         /** @description RFC 9457 problem details. */
         Problem: {
@@ -724,6 +824,7 @@ export interface components {
         ScreenID: number;
         PlaylistID: number;
         ModelID: number;
+        AssetID: number;
         Limit: number;
     };
     requestBodies: never;
@@ -914,49 +1015,6 @@ export interface operations {
         };
     };
     disableDevice: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["DeviceID"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: components["responses"]["Device"];
-            404: components["responses"]["Problem"];
-        };
-    };
-    setDeviceImage: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["DeviceID"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "multipart/form-data": {
-                    /**
-                     * Format: binary
-                     * @description PNG, JPEG or GIF
-                     */
-                    file: string;
-                    fit?: components["schemas"]["ImageFit"];
-                    dither?: components["schemas"]["ImageDither"];
-                };
-            };
-        };
-        responses: {
-            200: components["responses"]["Device"];
-            404: components["responses"]["Problem"];
-            422: components["responses"]["Problem"];
-        };
-    };
-    clearDeviceImage: {
         parameters: {
             query?: never;
             header?: never;
@@ -1404,6 +1462,121 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    listAssets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Uploaded images, newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Asset"][];
+                };
+            };
+        };
+    };
+    uploadAsset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                    /** @description Defaults to the file name. */
+                    name?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The asset */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Asset"];
+                };
+            };
+            422: components["responses"]["Problem"];
+        };
+    };
+    deleteAsset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["AssetID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Problem"];
+            /** @description Still used by a screen background */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewAsset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["AssetID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: int64 */
+                    model_id: number;
+                    fit?: components["schemas"]["ImageFit"];
+                    dither?: components["schemas"]["ImageDither"];
+                };
+            };
+        };
+        responses: {
+            /** @description The processed image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @description data:image/png;base64 URL */
+                        device: string;
+                    };
+                };
             };
             404: components["responses"]["Problem"];
         };

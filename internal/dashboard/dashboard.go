@@ -33,6 +33,7 @@ type Options struct {
 	DevicePublicURL string
 	Renderer        *render.Renderer
 	Scheduler       *render.Scheduler
+	UploadsDir      string
 }
 
 type Server struct {
@@ -44,6 +45,7 @@ type Server struct {
 	devicePublicURL string
 	renderer        *render.Renderer
 	scheduler       *render.Scheduler
+	uploadsDir      string
 }
 
 var _ gen.StrictServerInterface = (*Server)(nil)
@@ -58,6 +60,7 @@ func NewServer(opts Options) *Server {
 		devicePublicURL: opts.DevicePublicURL,
 		renderer:        opts.Renderer,
 		scheduler:       opts.Scheduler,
+		uploadsDir:      opts.UploadsDir,
 	}
 }
 
@@ -121,5 +124,27 @@ func (s *Server) GetSystem(_ context.Context, _ gen.GetSystemRequestObject) (gen
 		DevicePublicUrl:   s.devicePublicURL,
 		FrameworkVersion:  assets.FrameworkVersion,
 		TemplateFunctions: tmpl.FuncNames(),
+		Layouts:           toLayouts(),
 	}, nil
+}
+
+func toLayouts() []gen.Layout {
+	out := make([]gen.Layout, 0, len(render.Layouts))
+	for _, l := range render.Layouts {
+		gl := gen.Layout{Key: l.Key, Name: l.Name}
+		gl.Slots = make([]struct {
+			H    float32 `json:"h"`
+			Key  string  `json:"key"`
+			View string  `json:"view"`
+			W    float32 `json:"w"`
+			X    float32 `json:"x"`
+			Y    float32 `json:"y"`
+		}, len(l.Slots))
+		for i, s := range l.Slots {
+			gl.Slots[i].Key, gl.Slots[i].View = s.Key, s.View
+			gl.Slots[i].X, gl.Slots[i].Y, gl.Slots[i].W, gl.Slots[i].H = float32(s.X), float32(s.Y), float32(s.W), float32(s.H)
+		}
+		out = append(out, gl)
+	}
+	return out
 }

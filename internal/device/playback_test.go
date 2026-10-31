@@ -113,6 +113,16 @@ func TestPlaylistRotation(t *testing.T) {
 		t.Fatalf("refresh rates = %v", rates)
 	}
 
+	// A button press (EXT0 on the TRMNL X) skips to the next item immediately: we're on the first
+	// wake of A now, so the press jumps to B instead of showing A a second time.
+	if res := wake(); res.Filename != fmt.Sprintf("screen-%d.png", a.ID) {
+		t.Fatalf("expected A, got %s", res.Filename)
+	}
+	res, err := svc.Display(ctx, DisplayRequest{APIKey: d.APIKey, Telemetry: store.Telemetry{WakeReason: sql.NullString{String: "EXT0", Valid: true}}})
+	if err != nil || res.Filename != fmt.Sprintf("screen-%d.png", b.ID) {
+		t.Fatalf("button skip: %+v %v", res, err)
+	}
+
 	// Calibration overrides the playlist.
 	if _, err := svc.StartCalibration(ctx, d.ID); err != nil {
 		t.Fatal(err)

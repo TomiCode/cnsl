@@ -73,3 +73,54 @@ func ParseToneCurve(s string) (ToneCurve, error) {
 	}
 	return c.normalized(), nil
 }
+
+// LevelValues returns, for each of the 2^bitDepth levels, an 8-bit gray value that the render
+// pipeline (curve, then nearest level) maps back to exactly that level. Pre-dithered images
+// placed in a page are stored with these values so the final pass doesn't shift them. A level
+// the curve can't produce (clipped by the black/white point) uses the closest one it can.
+func (c ToneCurve) LevelValues(bitDepth int) []uint8 {
+	levels := 1 << bitDepth
+	step := 255.0 / float64(levels-1)
+	lut := c.LUT()
+	first, last := make([]int, levels), make([]int, levels)
+	for i := range first {
+		first[i] = -1
+	}
+	for v := range 256 {
+		l := min(max(int(float64(lut[v])/step+0.5), 0), levels-1)
+		if first[l] < 0 {
+			first[l] = v
+		}
+		last[l] = v
+	}
+	out := make([]uint8, levels)
+	for l := range levels {
+		best := -1
+		for d := 0; d < levels && best < 0; d++ {
+			for _, cand := range []int{l - d, l + d} {
+				if cand >= 0 && cand < levels && first[cand] >= 0 {
+					best = cand
+					break
+				}
+			}
+		}
+		out[l] = uint8((first[best] + last[best]) / 2)
+	}
+	return out
+}
+
+// Prepare turns any image into level indexes for a w×h area: grayscale, fit, tone curve, dither.
+func Prepare(src image.Image, w, h int, fit Fit, dither Dither, curve ToneCurve, bitDepth int) *image.Gray {
+	return Quantize(curve.Apply(Resize(Gray(src), w, h, fit)), bitDepth, dither)
+}
+
+// ForPage converts level indexes into 8-bit gray for embedding in a rendered page, using
+// LevelValues so the pipeline's final curve + quantization reproduces the same levels.
+func ForPage(levels *image.Gray, curve ToneCurve, bitDepth int) *image.Gray {
+	values := curve.LevelValues(bitDepth)
+	out := image.NewGray(levels.Bounds())
+	for i, l := range levels.Pix {
+		out.Pix[i] = values[min(int(l), len(values)-1)]
+	}
+	return out
+}

@@ -120,7 +120,7 @@ const input =
     <div class="flex flex-col gap-6 lg:col-span-2">
       <div class="rounded-lg border border-zinc-200 bg-white p-4">
         <div class="mb-1 text-sm font-medium">Content</div>
-        <p class="mb-3 text-xs text-zinc-500">Without a playlist the device shows its static image (or a placeholder).</p>
+        <p class="mb-3 text-xs text-zinc-500">Without a playlist the device shows a placeholder frame. Photos go into playlists as image screens.</p>
         <select :value="device.playlist_id ?? ''" :class="input" :disabled="playlistBusy" @change="changePlaylist">
           <option value="">No playlist</option>
           <option v-for="p in playlists.playlists" :key="p.id" :value="p.id">{{ p.name }} ({{ p.items.length }} items)</option>

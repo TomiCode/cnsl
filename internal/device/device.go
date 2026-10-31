@@ -8,7 +8,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"image"
 	"log/slog"
 	"strings"
 	"time"
@@ -152,7 +151,7 @@ func (s *Service) Display(ctx context.Context, req DisplayRequest) (DisplayResul
 
 	result := DisplayResult{Outcome: NotRegistered}
 	if d.Status == store.DeviceActive {
-		filename, rate, err := s.choose(ctx, d, now)
+		filename, rate, err := s.choose(ctx, d, now, req.Telemetry.WakeReason.String)
 		if err != nil {
 			return DisplayResult{}, err
 		}
@@ -211,11 +210,8 @@ func (s *Service) deviceForKey(ctx context.Context, apiKey string, id Identity) 
 	return &created, nil
 }
 
-// currentImage returns the device's assigned image, or the placeholder for its model.
-func (s *Service) currentImage(ctx context.Context, d *store.Device) (string, error) {
-	if d.ImageFilename.Valid {
-		return d.ImageFilename.String, nil
-	}
+// placeholder returns the "nothing to show" image for the device's model.
+func (s *Service) placeholder(ctx context.Context, d *store.Device) (string, error) {
 	m, err := s.modelFor(ctx, d)
 	if err != nil {
 		return "", err
@@ -228,59 +224,6 @@ func (s *Service) modelFor(ctx context.Context, d *store.Device) (store.DeviceMo
 		return store.DeviceModel{}, fmt.Errorf("%w: device has no model assigned", ErrInvalid)
 	}
 	return s.store.DeviceModel(ctx, d.ModelID.Int64)
-}
-
-// SetImage prepares img for the device's panel and assigns it.
-func (s *Service) SetImage(ctx context.Context, id int64, img image.Image, fit imaging.Fit, dither imaging.Dither) (store.Device, error) {
-	d, err := s.store.Device(ctx, id)
-	if err != nil {
-		return d, err
-	}
-	m, err := s.modelFor(ctx, &d)
-	if err != nil {
-		return d, err
-	}
-	curve, _ := imaging.ParseToneCurve(m.ToneCurve.String)
-	gray := curve.Apply(imaging.Resize(imaging.Gray(img), m.Width, m.Height, fit))
-	name, err := s.files.Save(imaging.Quantize(gray, m.BitDepth, dither), m.BitDepth)
-	if err != nil {
-		return d, err
-	}
-	previous := d.ImageFilename
-	d.ImageFilename = sql.NullString{String: name, Valid: true}
-	if err := s.store.UpdateDevice(ctx, &d); err != nil {
-		return d, err
-	}
-	s.removeUnused(ctx, previous)
-	s.events.Publish(events.Event{Type: events.DeviceUpdated, DeviceID: d.ID})
-	return d, nil
-}
-
-func (s *Service) ClearImage(ctx context.Context, id int64) (store.Device, error) {
-	d, err := s.store.Device(ctx, id)
-	if err != nil {
-		return d, err
-	}
-	previous := d.ImageFilename
-	d.ImageFilename = sql.NullString{}
-	if err := s.store.UpdateDevice(ctx, &d); err != nil {
-		return d, err
-	}
-	s.removeUnused(ctx, previous)
-	s.events.Publish(events.Event{Type: events.DeviceUpdated, DeviceID: d.ID})
-	return d, nil
-}
-
-func (s *Service) removeUnused(ctx context.Context, name sql.NullString) {
-	if !name.Valid {
-		return
-	}
-	if used, err := s.store.ImageInUse(ctx, name.String); err != nil || used {
-		return
-	}
-	if err := s.files.Remove(name.String); err != nil {
-		s.log.WarnContext(ctx, "remove unused image", "file", name.String, "err", err)
-	}
 }
 
 // Approve activates a pending or disabled device.
@@ -374,14 +317,9 @@ func (s *Service) update(ctx context.Context, id int64, change func(*store.Devic
 }
 
 func (s *Service) Delete(ctx context.Context, id int64) error {
-	d, err := s.store.Device(ctx, id)
-	if err != nil {
-		return err
-	}
 	if err := s.store.DeleteDevice(ctx, id); err != nil {
 		return err
 	}
-	s.removeUnused(ctx, d.ImageFilename)
 	s.events.Publish(events.Event{Type: events.DeviceDeleted, DeviceID: id})
 	return nil
 }

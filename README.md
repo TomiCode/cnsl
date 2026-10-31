@@ -3,9 +3,10 @@
 A self-hosted server and dashboard for TRMNL e-ink devices: Go backend, Vue 3 dashboard, SQLite,
 screens rendered with headless Chrome. Design docs live in a separate repository (`../docs`).
 
-Status: **phase 2** — screens & rendering: Go-template screens edited in Monaco with live preview,
-rendered by headless Chrome with trmnl-framework into 4-bit PNGs, playlists (wake-count rotation),
-gray-tone calibration. Phase 1: devices, approvals, telemetry, logs, static images, virtual device.
+Status: **phase 3** — layouts & images: framework split layouts and free regions, transparent
+regions over a background image or slideshow, image screens, an image library with dithering
+options (Floyd–Steinberg, Atkinson, ordered). Earlier phases: screens in Monaco rendered by headless
+Chrome, playlists, gray calibration, devices/approvals/telemetry/logs, virtual device.
 
 ## Connecting a TRMNL
 
@@ -77,7 +78,7 @@ applied on startup.
 | `CNSL_ADDR` | `:8080` | Dashboard listener |
 | `CNSL_DEVICE_ADDR` | `:8081` | Device listener |
 | `CNSL_DEVICE_PUBLIC_URL` | — | Device listener URL as devices see it, e.g. `http://192.168.1.10:8081` |
-| `CNSL_DATA_DIR` | `./data` | SQLite database and images |
+| `CNSL_DATA_DIR` | `./data` | SQLite database, rendered images, uploads, cache |
 | `CNSL_CHROME_URL` | — | Remote headless Chrome; empty = launch a local one |
 | `CNSL_RENDER_BASE_URL` | `http://localhost:<port>` | URL Chrome uses to reach the dashboard listener |
 | `CNSL_TIMEZONE` | `TZ`, else the system zone | Household timezone |

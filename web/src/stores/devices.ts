@@ -78,22 +78,6 @@ export const useDevicesStore = defineStore('devices', () => {
     devices.value = devices.value.filter((d) => d.id !== id)
   }
 
-  async function setImage(id: number, file: File, fit: Schemas['ImageFit'], dither: Schemas['ImageDither']) {
-    const form = new FormData()
-    form.append('file', file)
-    form.append('fit', fit)
-    form.append('dither', dither)
-    // openapi-fetch would JSON-encode the body; send multipart ourselves.
-    const res = await fetch(`/api/v1/devices/${id}/image`, { method: 'PUT', body: form })
-    const data = await res.json()
-    if (!res.ok) throw new ApiError(problemMessage(data))
-    return replace(data as Device)
-  }
-
-  async function clearImage(id: number) {
-    return replace(unwrap(await api.DELETE('/devices/{id}/image', { params: { path: { id } } })))
-  }
-
   async function setPlaylist(id: number, playlistId: number | null) {
     return replace(unwrap(await api.PUT('/devices/{id}/playlist', { params: { path: { id } }, body: { playlist_id: playlistId } })))
   }
@@ -143,8 +127,6 @@ export const useDevicesStore = defineStore('devices', () => {
     approve,
     disable,
     remove,
-    setImage,
-    clearImage,
     setPlaylist,
     startCalibration,
     stopCalibration,

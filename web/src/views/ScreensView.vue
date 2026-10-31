@@ -13,6 +13,7 @@ const router = useRouter()
 const creating = ref(false)
 const name = ref('')
 const modelId = ref<number | null>(null)
+const kind = ref<'template' | 'image'>('template')
 const error = ref<string | null>(null)
 
 onMounted(async () => {
@@ -27,7 +28,7 @@ onMounted(async () => {
 async function create() {
   if (!name.value.trim() || modelId.value == null) return
   try {
-    const sc = await screens.create(name.value.trim(), modelId.value)
+    const sc = await screens.create(name.value.trim(), modelId.value, kind.value)
     await router.push(`/screens/${sc.id}`)
   } catch (e) {
     error.value = (e as Error).message
@@ -66,6 +67,13 @@ const input = 'rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm fo
       <label class="text-sm">
         <span class="mb-1 block text-zinc-600">Name</span>
         <input v-model="name" :class="input" placeholder="Kitchen dashboard" autofocus maxlength="100" />
+      </label>
+      <label class="text-sm">
+        <span class="mb-1 block text-zinc-600">Kind</span>
+        <select v-model="kind" :class="input">
+          <option value="template">Template (HTML)</option>
+          <option value="image">Image / slideshow</option>
+        </select>
       </label>
       <label class="text-sm">
         <span class="mb-1 block text-zinc-600">For model</span>
@@ -109,7 +117,7 @@ const input = 'rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm fo
         <div class="px-4 py-3">
           <div class="font-medium group-hover:underline">{{ sc.name }}</div>
           <div class="flex items-center gap-1.5 text-xs text-zinc-500">
-            {{ modelName(sc.model_id) }} · rendered {{ timeAgo(sc.latest_render?.created_at) }}
+            {{ sc.kind === 'image' ? 'Image' : sc.layout === 'full' ? 'Full' : sc.layout }} · {{ modelName(sc.model_id) }} · rendered {{ timeAgo(sc.latest_render?.created_at) }}
             <CircleAlert v-if="sc.latest_render?.status === 'error'" class="size-3.5 text-red-600" title="Last render failed" />
           </div>
         </div>

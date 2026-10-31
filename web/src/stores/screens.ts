@@ -16,8 +16,8 @@ export const useScreensStore = defineStore('screens', () => {
     loaded.value = true
   }
 
-  async function create(name: string, modelId: number) {
-    const sc = unwrap(await api.POST('/screens', { body: { name, model_id: modelId } }))
+  async function create(name: string, modelId: number, kind: Schemas['ScreenKind'] = 'template') {
+    const sc = unwrap(await api.POST('/screens', { body: { name, model_id: modelId, kind } }))
     await load()
     return sc
   }

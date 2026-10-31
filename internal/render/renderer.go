@@ -27,6 +27,9 @@ type Renderer struct {
 	baseURL string // where the browser reaches the dashboard listener
 	tz      *time.Location
 	log     *slog.Logger
+
+	uploadsDir string // original asset uploads
+	cacheDir   string // processed asset variants
 }
 
 type Options struct {
@@ -36,11 +39,14 @@ type Options struct {
 	BaseURL  string
 	Timezone *time.Location
 	Log      *slog.Logger
+
+	UploadsDir string
+	CacheDir   string
 }
 
 func NewRenderer(o Options) *Renderer {
 	return &Renderer{store: o.Store, files: o.Files, browser: o.Browser, pages: newPages(),
-		baseURL: o.BaseURL, tz: o.Timezone, log: o.Log}
+		baseURL: o.BaseURL, tz: o.Timezone, log: o.Log, uploadsDir: o.UploadsDir, cacheDir: o.CacheDir}
 }
 
 // Request describes one render. Overrides replace region templates by key without saving
@@ -85,7 +91,39 @@ func (r *Renderer) Render(ctx context.Context, req Request) (Result, error) {
 		sc.Head = *req.Head
 	}
 
-	html, errs := compose(sc, model, regions, tmpl.Context{
+	// Background layer: one asset, or the slideshow's current one.
+	bg, err := ParseBackground(sc.Background)
+	if err != nil {
+		return Result{}, fmt.Errorf("invalid background: %w", err)
+	}
+	var bgLevels *image.Gray
+	if id, ok := bg.Pick(sc.BackgroundIndex); ok {
+		if bgLevels, err = r.assetLevels(ctx, id, model, imaging.Fit(bg.Fit), imaging.Dither(bg.Dither)); err != nil {
+			return Result{}, err
+		}
+	}
+
+	// Image screens are just their background: no browser needed.
+	if sc.Kind == "image" {
+		if bgLevels == nil {
+			return Result{}, errors.New("this image screen has no image yet")
+		}
+		res, err := levelsResult(bgLevels, model.BitDepth)
+		res.Duration = time.Since(start)
+		return res, err
+	}
+
+	bgURL := ""
+	if bgLevels != nil {
+		curve, _ := imaging.ParseToneCurve(model.ToneCurve.String)
+		var buf bytes.Buffer
+		if err := png.Encode(&buf, imaging.ForPage(bgLevels, curve, model.BitDepth)); err != nil {
+			return Result{}, err
+		}
+		bgURL = "/internal/render/page/" + r.pages.putBytes(buf.Bytes(), "image/png")
+	}
+
+	html, errs := compose(page{screen: sc, model: model, background: bgURL}, regions, tmpl.Context{
 		Now:    time.Now().In(r.tz),
 		Screen: tmpl.ScreenInfo{Name: sc.Name, Width: model.Width, Height: model.Height, BitDepth: model.BitDepth},
 		Data:   map[string]any{},
@@ -129,8 +167,36 @@ func (r *Renderer) RenderAndStore(ctx context.Context, screenID int64, trigger s
 	if rec.Status == "error" {
 		r.log.WarnContext(ctx, "screen render failed", "screen", screenID, "trigger", trigger, "err", rec.Error.String)
 	}
+	if rec.Status == "ok" {
+		r.advanceSlideshow(ctx, screenID)
+	}
 	r.prune(ctx, screenID)
 	return rec, nil
+}
+
+// advanceSlideshow moves a slideshow background to its next image for the next render.
+func (r *Renderer) advanceSlideshow(ctx context.Context, screenID int64) {
+	sc, err := r.store.Screen(ctx, screenID)
+	if err != nil {
+		return
+	}
+	if bg, err := ParseBackground(sc.Background); err == nil && bg.Kind == "slideshow" && len(bg.AssetIDs) > 1 {
+		if err := r.store.SetBackgroundIndex(ctx, screenID, sc.BackgroundIndex+1); err != nil {
+			r.log.WarnContext(ctx, "advance slideshow", "screen", screenID, "err", err)
+		}
+	}
+}
+
+// levelsResult packages prepared level indexes as a render result (image screens).
+func levelsResult(levels *image.Gray, bitDepth int) (Result, error) {
+	var device, raw bytes.Buffer
+	if err := imaging.EncodePNG(&device, levels, bitDepth); err != nil {
+		return Result{}, err
+	}
+	if err := png.Encode(&raw, imaging.Expand(levels, bitDepth)); err != nil {
+		return Result{}, err
+	}
+	return Result{Raw: raw.Bytes(), Device: device.Bytes(), Levels: levels, BitDepth: bitDepth}, nil
 }
 
 func (r *Renderer) prune(ctx context.Context, screenID int64) {

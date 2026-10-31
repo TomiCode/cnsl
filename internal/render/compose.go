@@ -9,18 +9,6 @@ import (
 	"github.com/TomiCode/cnsl/internal/tmpl"
 )
 
-// DefaultTemplate is what a new screen starts with.
-const DefaultTemplate = `<div class="view view--full">
-  <div class="layout layout--col layout--center gap--large">
-    <span class="value value--xxxlarge value--tnums">{{ date "15:04" .Now }}</span>
-    <span class="label label--large">{{ date "Monday, 2 January" .Now }}</span>
-  </div>
-  <div class="title_bar">
-    <span class="title">{{ .Screen.Name }}</span>
-  </div>
-</div>
-`
-
 var pageTemplate = template.Must(template.New("page").Parse(`<!doctype html>
 <html lang="en">
 <head>
@@ -29,75 +17,136 @@ var pageTemplate = template.Must(template.New("page").Parse(`<!doctype html>
 <script src="/internal/render/framework/{{ .Framework }}/plugins.js"></script>
 <style>
   html, body { margin: 0; padding: 0; background: #fff; overflow: hidden; }
-  .cnsl-region { position: absolute; overflow: hidden; }
+  .screen { position: relative; }
+  .cnsl-free { position: absolute; overflow: hidden; }
+  /* Transparent regions let the background show through. The framework paints view surfaces on
+     ::before (and on a runtime .mashup-cell wrapper in some modes), so those are cleared too. */
+  .cnsl-transparent, .cnsl-transparent::before, .cnsl-transparent::after, .cnsl-transparent .layout,
+  .mashup-cell:has(> .cnsl-transparent) {
+    background: transparent !important; background-image: none !important;
+  }
   .cnsl-error { margin: 8px; padding: 8px; border: 2px solid #000; font: 14px/1.3 monospace; white-space: pre-wrap; background: #fff; }
+{{- if .Background }}
+  .cnsl-bg { position: fixed; left: 0; top: 0; z-index: 0; image-rendering: pixelated; }
+  .screen { z-index: 1; background: transparent !important; background-image: none !important; }
+{{- end }}
 </style>
 {{ .Head }}
 </head>
 <body class="environment trmnl">
-<div class="{{ .ScreenClasses }}">
-{{- range .Regions }}
-{{- if .Bare }}
-{{ .HTML }}
-{{- else }}
-<section class="cnsl-region {{ .Class }}" data-region="{{ .Key }}" style="{{ .Style }}">{{ .HTML }}</section>
+{{- if .Background }}
+<img class="cnsl-bg" src="{{ .Background }}" width="{{ .Width }}" height="{{ .Height }}" alt="">
 {{- end }}
+<div class="{{ .ScreenClasses }}">
+{{- if .Mashup }}
+<div class="mashup mashup--{{ .Mashup }}">
+{{- end }}
+{{- range .Regions }}
+{{ .HTML }}
+{{- end }}
+{{- if .Mashup }}
+</div>
 {{- end }}
 </div>
 </body>
 </html>`))
 
-type composedRegion struct {
-	Key   string
-	Class string
-	Style template.CSS
-	HTML  template.HTML
-	Bare  bool // a single full-screen region is placed directly in .screen, as the framework expects
+// page is everything compose needs besides the regions.
+type page struct {
+	screen     store.Screen
+	model      store.DeviceModel
+	background string // URL of the prepared background image, or ""
 }
 
-// compose builds the page for a screen. Region rectangles are in device pixels and are
-// converted to CSS pixels with the model's scale. Template errors are rendered in place and
+// compose builds the page for a screen. Region rectangles are in device pixels and are converted
+// to CSS pixels inside .screen with the model's scale. Template errors are rendered in place and
 // returned.
-func compose(sc store.Screen, model store.DeviceModel, regions []store.Region, ctx tmpl.Context) (string, []*tmpl.Error) {
+func compose(p page, regions []store.Region, ctx tmpl.Context) (string, []*tmpl.Error) {
+	layout, ok := LayoutByKey(p.screen.Layout)
+	if !ok {
+		layout, _ = LayoutByKey(LayoutFull)
+	}
+	views := map[string]string{}
+	for _, s := range layout.Slots {
+		views[s.Key] = s.View
+	}
+	scale := p.model.Scale
+	if scale <= 0 {
+		scale = 1
+	}
+
 	var (
 		errs []*tmpl.Error
-		out  []composedRegion
+		out  []struct{ HTML template.HTML }
 	)
-	full := len(regions) == 1 && regions[0].X == 0 && regions[0].Y == 0 &&
-		regions[0].W == model.Width && regions[0].H == model.Height
-
-	for _, r := range regions {
+	for _, r := range ordered(layout, regions) {
 		rctx := ctx
 		rctx.Region = tmpl.RegionInfo{Key: r.Key, Width: r.W, Height: r.H}
-		html, err := tmpl.Render(r.Key, r.Template, rctx)
+		body, err := tmpl.Render(r.Key, r.Template, rctx)
 		if err != nil {
 			te, ok := err.(*tmpl.Error)
 			if !ok {
 				te = &tmpl.Error{Region: r.Key, Message: err.Error()}
 			}
 			errs = append(errs, te)
-			html = template.HTML(`<div class="cnsl-error">` + template.HTMLEscapeString(te.Error()) + `</div>`)
+			body = template.HTML(`<div class="cnsl-error">` + template.HTMLEscapeString(te.Error()) + `</div>`)
 		}
-		s := model.Scale
-		out = append(out, composedRegion{
-			Key:   r.Key,
-			Class: r.Class,
-			HTML:  html,
-			Bare:  full,
-			Style: template.CSS(fmt.Sprintf("left:%.2fpx;top:%.2fpx;width:%.2fpx;height:%.2fpx;z-index:%d",
-				float64(r.X)/s, float64(r.Y)/s, float64(r.W)/s, float64(r.H)/s, r.Z)),
-		})
+
+		classes := strings.TrimSpace(r.Class)
+		if r.Transparent {
+			classes = strings.TrimSpace(classes + " cnsl-transparent")
+		}
+		var html string
+		switch {
+		case layout.Key == LayoutFree:
+			html = fmt.Sprintf(`<div class="cnsl-free %s" data-region="%s" style="left:%.2fpx;top:%.2fpx;width:%.2fpx;height:%.2fpx;z-index:%d">%s</div>`,
+				template.HTMLEscapeString(classes), template.HTMLEscapeString(r.Key),
+				float64(r.X)/scale, float64(r.Y)/scale, float64(r.W)/scale, float64(r.H)/scale, r.Z, body)
+		case legacyView(r.Template):
+			html = string(body) // the template brings its own view element
+		default:
+			html = fmt.Sprintf(`<div class="view view--%s %s" data-region="%s">%s</div>`,
+				views[r.Key], template.HTMLEscapeString(classes), template.HTMLEscapeString(r.Key), body)
+		}
+		out = append(out, struct{ HTML template.HTML }{template.HTML(html)})
 	}
 
+	mashup := ""
+	if layout.Key != LayoutFull && layout.Key != LayoutFree {
+		mashup = layout.Key
+	}
 	var b strings.Builder
 	err := pageTemplate.Execute(&b, map[string]any{
-		"Framework":     sc.FrameworkVersion,
-		"Head":          template.HTML(sc.Head),
-		"ScreenClasses": model.ScreenClasses,
+		"Framework":     p.screen.FrameworkVersion,
+		"Head":          template.HTML(p.screen.Head),
+		"ScreenClasses": p.model.ScreenClasses,
+		"Mashup":        mashup,
 		"Regions":       out,
+		"Background":    p.background,
+		"Width":         p.model.Width,
+		"Height":        p.model.Height,
 	})
 	if err != nil { // only possible with a broken page template
 		panic(err)
 	}
 	return b.String(), errs
+}
+
+// ordered returns regions in the DOM order the layout needs: slot order for presets (the
+// framework positions mashup views by order), z then id for free regions.
+func ordered(layout Layout, regions []store.Region) []store.Region {
+	if len(layout.Slots) == 0 {
+		return regions // already sorted by z, id from the store
+	}
+	byKey := map[string]store.Region{}
+	for _, r := range regions {
+		byKey[r.Key] = r
+	}
+	out := make([]store.Region, 0, len(layout.Slots))
+	for _, s := range layout.Slots {
+		if r, ok := byKey[s.Key]; ok {
+			out = append(out, r)
+		}
+	}
+	return out
 }

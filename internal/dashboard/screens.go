@@ -37,7 +37,8 @@ func (s *Server) ListScreens(ctx context.Context, _ gen.ListScreensRequestObject
 
 func (s *Server) screenSummary(ctx context.Context, sc store.Screen) (gen.ScreenSummary, error) {
 	sum := gen.ScreenSummary{
-		Id: sc.ID, Name: sc.Name, ModelId: sc.ModelID, RenderInterval: sc.RenderInterval, UpdatedAt: sc.UpdatedAt.Time,
+		Id: sc.ID, Name: sc.Name, Kind: gen.ScreenKind(sc.Kind), Layout: sc.Layout, ModelId: sc.ModelID,
+		RenderInterval: sc.RenderInterval, UpdatedAt: sc.UpdatedAt.Time,
 	}
 	if r, err := s.store.LatestRender(ctx, sc.ID, false); err == nil {
 		gr := toRender(r)
@@ -62,13 +63,17 @@ func (s *Server) screenResponse(ctx context.Context, sc store.Screen) (gen.Scree
 	if err != nil {
 		return gen.ScreenJSONResponse{}, err
 	}
+	bg, _ := render.ParseBackground(sc.Background)
 	out := gen.ScreenJSONResponse{
-		Id: sum.Id, Name: sum.Name, ModelId: sum.ModelId, RenderInterval: sum.RenderInterval, UpdatedAt: sum.UpdatedAt,
+		Id: sum.Id, Name: sum.Name, Kind: sum.Kind, Layout: sum.Layout, ModelId: sum.ModelId,
+		RenderInterval: sum.RenderInterval, UpdatedAt: sum.UpdatedAt,
 		LatestRender: sum.LatestRender, LatestImage: sum.LatestImage,
-		FrameworkVersion: sc.FrameworkVersion, Head: sc.Head, Regions: make([]gen.Region, 0, len(regions)),
+		FrameworkVersion: sc.FrameworkVersion, Head: sc.Head, Background: toBackground(bg),
+		Regions: make([]gen.Region, 0, len(regions)),
 	}
 	for _, r := range regions {
-		out.Regions = append(out.Regions, gen.Region{Id: r.ID, Key: r.Key, X: r.X, Y: r.Y, W: r.W, H: r.H, Template: r.Template})
+		out.Regions = append(out.Regions, gen.Region{Id: r.ID, Key: r.Key, X: r.X, Y: r.Y, W: r.W, H: r.H, Z: r.Z,
+			Transparent: r.Transparent, Template: r.Template})
 	}
 	return out, nil
 }
@@ -86,25 +91,44 @@ func (s *Server) GetScreen(ctx context.Context, req gen.GetScreenRequestObject) 
 }
 
 func (s *Server) CreateScreen(ctx context.Context, req gen.CreateScreenRequestObject) (gen.CreateScreenResponseObject, error) {
+	invalid := func(err error) gen.CreateScreenResponseObject {
+		return gen.CreateScreen422ApplicationProblemPlusJSONResponse{ProblemApplicationProblemPlusJSONResponse: invalidProblem(err)}
+	}
 	model, err := s.store.DeviceModel(ctx, req.Body.ModelId)
 	if errors.Is(err, store.ErrNotFound) {
-		return gen.CreateScreen422ApplicationProblemPlusJSONResponse{ProblemApplicationProblemPlusJSONResponse: invalidProblem(fmt.Errorf("unknown device model %d", req.Body.ModelId))}, nil
+		return invalid(fmt.Errorf("unknown device model %d", req.Body.ModelId)), nil
 	}
 	if err != nil {
 		return nil, err
 	}
+	kind := gen.ScreenKindTemplate
+	if req.Body.Kind != nil {
+		kind = *req.Body.Kind
+	}
 	sc := store.Screen{
 		Name:             strings.TrimSpace(req.Body.Name),
+		Kind:             string(kind),
+		Layout:           render.LayoutFull,
 		ModelID:          model.ID,
 		FrameworkVersion: assets.FrameworkVersion,
 		RenderInterval:   900,
 	}
-	regions := []store.Region{{Key: "main", W: model.Width, H: model.Height, Template: render.DefaultTemplate}}
+	var regions []store.Region
+	switch kind {
+	case gen.ScreenKindTemplate:
+		regions = []store.Region{{Key: "main", W: model.Width, H: model.Height, Template: render.DefaultTemplate}}
+	case gen.ScreenKindImage:
+		sc.RenderInterval = 3600 // only matters for slideshows
+	default:
+		return invalid(fmt.Errorf("unknown screen kind %q", kind)), nil
+	}
 	if err := s.store.CreateScreen(ctx, &sc, regions); err != nil {
 		return nil, err
 	}
 	s.events.Publish(events.Event{Type: events.ScreenUpdated, ScreenID: sc.ID})
-	s.scheduler.Request(sc.ID, "edit")
+	if kind == gen.ScreenKindTemplate {
+		s.scheduler.Request(sc.ID, "edit")
+	}
 	resp, err := s.screenResponse(ctx, sc)
 	return gen.CreateScreen201JSONResponse{ScreenJSONResponse: resp}, err
 }
@@ -135,38 +159,51 @@ func (s *Server) UpdateScreen(ctx context.Context, req gen.UpdateScreenRequestOb
 	if err != nil {
 		return nil, err
 	}
-	regions, err := s.store.Regions(ctx, sc.ID)
-	if err != nil {
-		return nil, err
+	bg := fromBackground(b.Background)
+	if err := bg.Validate(); err != nil {
+		return invalid(err.Error(), nil), nil
 	}
-	byID := make(map[int64]*store.Region, len(regions))
-	for i := range regions {
-		byID[regions[i].ID] = &regions[i]
+	for _, id := range bg.AssetIDs {
+		if _, err := s.store.Asset(ctx, id); errors.Is(err, store.ErrNotFound) {
+			return invalid(fmt.Sprintf("unknown image %d", id), nil), nil
+		} else if err != nil {
+			return nil, err
+		}
+	}
+	if sc.Kind == "image" && bg.Kind == "none" {
+		return invalid("an image screen needs an image or a slideshow", nil), nil
 	}
 
-	var templateErrs []gen.TemplateError
-	for _, in := range b.Regions {
-		r, ok := byID[in.Id]
+	var regions []store.Region
+	if sc.Kind == "template" {
+		layout, ok := render.LayoutByKey(b.Layout)
 		if !ok {
-			return invalid(fmt.Sprintf("region %d does not belong to this screen", in.Id), nil), nil
+			return invalid(fmt.Sprintf("unknown layout %q", b.Layout), nil), nil
 		}
-		r.Template = in.Template
-		if err := tmpl.Check(r.Key, in.Template); err != nil {
-			templateErrs = append(templateErrs, toTemplateError(err))
+		regions, err = s.mergeRegions(ctx, sc, model, layout, b.Regions)
+		if err != nil {
+			return invalid(err.Error(), nil), nil
 		}
-	}
-	if len(templateErrs) > 0 {
-		return invalid("the template has syntax errors", templateErrs), nil
+		var templateErrs []gen.TemplateError
+		for _, r := range regions {
+			if err := tmpl.Check(r.Key, r.Template); err != nil {
+				templateErrs = append(templateErrs, toTemplateError(err))
+			}
+		}
+		if len(templateErrs) > 0 {
+			return invalid("the template has syntax errors", templateErrs), nil
+		}
+		sc.Layout = layout.Key
 	}
 
-	// Phase 2 screens have one full-size region; keep it full-size when the model changes.
-	if model.ID != sc.ModelID && len(regions) == 1 {
-		regions[0].X, regions[0].Y, regions[0].W, regions[0].H = 0, 0, model.Width, model.Height
+	if bg.JSON() != sc.Background {
+		_ = s.store.SetBackgroundIndex(ctx, sc.ID, 0) // a new slideshow starts from its first image
 	}
 	sc.Name = strings.TrimSpace(b.Name)
 	sc.ModelID = model.ID
 	sc.Head = b.Head
 	sc.RenderInterval = b.RenderInterval
+	sc.Background = bg.JSON()
 	if err := s.store.UpdateScreen(ctx, &sc, regions); err != nil {
 		return nil, err
 	}
@@ -174,6 +211,107 @@ func (s *Server) UpdateScreen(ctx context.Context, req gen.UpdateScreenRequestOb
 	s.scheduler.Request(sc.ID, "edit")
 	resp, err := s.screenResponse(ctx, sc)
 	return gen.UpdateScreen200JSONResponse{ScreenJSONResponse: resp}, err
+}
+
+// mergeRegions turns the submitted regions into the screen's new region list. For preset
+// layouts the stored regions are updated from the input (matched by id, then key) and reshaped
+// to the layout's slots; for the free layout the input defines the regions and their rectangles.
+func (s *Server) mergeRegions(ctx context.Context, sc store.Screen, model store.DeviceModel, layout render.Layout, in []regionInput) ([]store.Region, error) {
+	existing, err := s.store.Regions(ctx, sc.ID)
+	if err != nil {
+		return nil, err
+	}
+	byID := map[int64]int{}
+	for i, r := range existing {
+		byID[r.ID] = i
+	}
+	seen := map[string]bool{}
+	for _, r := range in {
+		if seen[r.Key] {
+			return nil, fmt.Errorf("region key %q is used twice", r.Key)
+		}
+		seen[r.Key] = true
+		if r.Id != nil {
+			if _, ok := byID[*r.Id]; !ok {
+				return nil, fmt.Errorf("region %d does not belong to this screen", *r.Id)
+			}
+		}
+	}
+
+	if layout.Key == render.LayoutFree {
+		out := make([]store.Region, 0, len(in))
+		for _, r := range in {
+			reg := store.Region{Key: r.Key, Template: r.Template}
+			if r.Id != nil {
+				reg = existing[byID[*r.Id]]
+				reg.Key, reg.Template = r.Key, r.Template
+			}
+			if r.Transparent != nil {
+				reg.Transparent = *r.Transparent
+			}
+			if r.X != nil && r.Y != nil && r.W != nil && r.H != nil {
+				reg.X, reg.Y, reg.W, reg.H = *r.X, *r.Y, *r.W, *r.H
+			}
+			if r.Z != nil {
+				reg.Z = *r.Z
+			}
+			if reg.W <= 0 || reg.H <= 0 || reg.X < 0 || reg.Y < 0 || reg.X+reg.W > model.Width || reg.Y+reg.H > model.Height {
+				return nil, fmt.Errorf("region %q must lie within the %d×%d screen and have a size", reg.Key, model.Width, model.Height)
+			}
+			out = append(out, reg)
+		}
+		return out, nil
+	}
+
+	// Preset: apply submitted contents to the stored regions, then reshape to the layout.
+	merged := append([]store.Region(nil), existing...)
+	for _, r := range in {
+		idx := -1
+		if r.Id != nil {
+			idx = byID[*r.Id]
+		} else {
+			for i, e := range merged {
+				if e.Key == r.Key {
+					idx = i
+				}
+			}
+		}
+		if idx < 0 {
+			continue // new regions come from the layout's slots
+		}
+		merged[idx].Template = r.Template
+		if r.Transparent != nil {
+			merged[idx].Transparent = *r.Transparent
+		}
+	}
+	return render.ApplyLayout(layout, model, merged), nil
+}
+
+func toBackground(b render.Background) gen.Background {
+	fit, dither, order := gen.ImageFit(b.Fit), gen.ImageDither(b.Dither), gen.BackgroundOrder(b.Order)
+	ids := append([]int64{}, b.AssetIDs...)
+	return gen.Background{Kind: gen.BackgroundKind(b.Kind), AssetIds: &ids, Fit: &fit, Dither: &dither, Order: &order}
+}
+
+func fromBackground(g gen.Background) render.Background {
+	b := render.Background{Kind: string(g.Kind)}
+	if g.AssetIds != nil {
+		b.AssetIDs = *g.AssetIds
+	}
+	if g.Fit != nil {
+		b.Fit = string(*g.Fit)
+	}
+	if g.Dither != nil {
+		b.Dither = string(*g.Dither)
+	}
+	if g.Order != nil {
+		b.Order = string(*g.Order)
+	}
+	if b.Kind == "none" {
+		b.AssetIDs = nil
+	}
+	parsed, _ := render.ParseBackground(b.JSON()) // fill defaults
+	return parsed
 }
 
 func (s *Server) DeleteScreen(ctx context.Context, req gen.DeleteScreenRequestObject) (gen.DeleteScreenResponseObject, error) {
@@ -270,4 +408,17 @@ func toTemplateError(err error) gen.TemplateError {
 func rendererProblem(err error) gen.Problem {
 	detail := "the renderer is unavailable: " + err.Error()
 	return gen.Problem{Title: http.StatusText(http.StatusServiceUnavailable), Status: http.StatusServiceUnavailable, Detail: &detail}
+}
+
+// regionInput is one entry of ScreenUpdate.regions (an anonymous struct in the generated code).
+type regionInput = struct {
+	H           *int   `json:"h,omitempty"`
+	Id          *int64 `json:"id,omitempty"`
+	Key         string `json:"key"`
+	Template    string `json:"template"`
+	Transparent *bool  `json:"transparent,omitempty"`
+	W           *int   `json:"w,omitempty"`
+	X           *int   `json:"x,omitempty"`
+	Y           *int   `json:"y,omitempty"`
+	Z           *int   `json:"z,omitempty"`
 }

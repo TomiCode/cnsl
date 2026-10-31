@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: cnsl dashboard API
-  version: 0.3.0
+  version: 0.4.0
   description: |
     API used by the cnsl web dashboard. Device (firmware) endpoints are not part of this spec;
     they are served on the separate device listener (and mirrored under /device on the
@@ -14,6 +14,7 @@ tags:
   - name: devices
   - name: screens
   - name: playlists
+  - name: assets
   - name: stream
     description: Server-Sent Events. Implemented by hand (not generated) because it streams.
 
@@ -153,45 +154,6 @@ paths:
       - $ref: "#/components/parameters/DeviceID"
     post:
       operationId: disableDevice
-      tags: [devices]
-      responses:
-        "200":
-          $ref: "#/components/responses/Device"
-        "404":
-          $ref: "#/components/responses/Problem"
-
-  /devices/{id}/image:
-    parameters:
-      - $ref: "#/components/parameters/DeviceID"
-    put:
-      operationId: setDeviceImage
-      summary: Upload a static image for the device (until screens exist)
-      tags: [devices]
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              type: object
-              required: [file]
-              properties:
-                file:
-                  type: string
-                  format: binary
-                  description: PNG, JPEG or GIF
-                fit:
-                  $ref: "#/components/schemas/ImageFit"
-                dither:
-                  $ref: "#/components/schemas/ImageDither"
-      responses:
-        "200":
-          $ref: "#/components/responses/Device"
-        "404":
-          $ref: "#/components/responses/Problem"
-        "422":
-          $ref: "#/components/responses/Problem"
-    delete:
-      operationId: clearDeviceImage
       tags: [devices]
       responses:
         "200":
@@ -550,6 +512,100 @@ paths:
         "404":
           $ref: "#/components/responses/Problem"
 
+  /assets:
+    get:
+      operationId: listAssets
+      tags: [assets]
+      responses:
+        "200":
+          description: Uploaded images, newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Asset"
+    post:
+      operationId: uploadAsset
+      summary: Upload an image (PNG, JPEG or GIF); identical files are stored once
+      tags: [assets]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                name:
+                  type: string
+                  description: Defaults to the file name.
+      responses:
+        "201":
+          description: The asset
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Asset"
+        "422":
+          $ref: "#/components/responses/Problem"
+
+  /assets/{id}:
+    parameters:
+      - $ref: "#/components/parameters/AssetID"
+    delete:
+      operationId: deleteAsset
+      tags: [assets]
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          description: Still used by a screen background
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+
+  /assets/{id}/preview:
+    parameters:
+      - $ref: "#/components/parameters/AssetID"
+    post:
+      operationId: previewAsset
+      summary: Show an image as a device model would display it
+      tags: [assets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [model_id]
+              properties:
+                model_id: { type: integer, format: int64 }
+                fit:
+                  $ref: "#/components/schemas/ImageFit"
+                dither:
+                  $ref: "#/components/schemas/ImageDither"
+      responses:
+        "200":
+          description: The processed image
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [device]
+                properties:
+                  device:
+                    type: string
+                    description: data:image/png;base64 URL
+        "404":
+          $ref: "#/components/responses/Problem"
+
 components:
   parameters:
     DeviceID:
@@ -568,6 +624,11 @@ components:
       required: true
       schema: { type: integer, format: int64 }
     ModelID:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer, format: int64 }
+    AssetID:
       name: id
       in: path
       required: true
@@ -620,7 +681,7 @@ components:
 
     SystemInfo:
       type: object
-      required: [version, timezone, device_public_url, template_functions, framework_version]
+      required: [version, timezone, device_public_url, template_functions, framework_version, layouts]
       properties:
         version: { type: string }
         framework_version: { type: string, example: 3.4.4 }
@@ -628,6 +689,10 @@ components:
           type: array
           items: { type: string }
           description: Helper functions available in screen templates.
+        layouts:
+          type: array
+          items:
+            $ref: "#/components/schemas/Layout"
         timezone: { type: string, example: Europe/Vienna }
         device_public_url:
           type: string
@@ -681,10 +746,6 @@ components:
           description: Seconds between wakes.
         sleep_start: { type: string, nullable: true, example: "22:00" }
         sleep_end: { type: string, nullable: true, example: "06:00" }
-        image_filename:
-          type: string
-          nullable: true
-          description: Static image, shown when the device has no playlist; null = placeholder.
         playlist_id: { type: integer, format: int64, nullable: true }
         calibrating_until:
           type: string
@@ -718,11 +779,11 @@ components:
     ImageFit:
       type: string
       enum: [contain, cover]
-      default: contain
+      default: cover
 
     ImageDither:
       type: string
-      enum: [none, floyd-steinberg]
+      enum: [none, floyd-steinberg, atkinson, ordered]
       default: floyd-steinberg
 
     Telemetry:
@@ -787,7 +848,7 @@ components:
 
     Region:
       type: object
-      required: [id, key, x, y, w, h, template]
+      required: [id, key, x, y, w, h, z, transparent, template]
       properties:
         id: { type: integer, format: int64 }
         key: { type: string, example: main }
@@ -795,6 +856,10 @@ components:
         y: { type: integer }
         w: { type: integer }
         h: { type: integer }
+        z: { type: integer }
+        transparent:
+          type: boolean
+          description: Let the screen background show through this region.
         template: { type: string }
 
     Render:
@@ -809,12 +874,59 @@ components:
         trigger: { type: string, example: edit }
         created_at: { type: string, format: date-time }
 
+    ScreenKind:
+      type: string
+      enum: [template, image]
+      description: template = HTML regions rendered by the browser; image = just the background.
+
+    Background:
+      type: object
+      required: [kind]
+      properties:
+        kind:
+          type: string
+          enum: [none, image, slideshow]
+        asset_ids:
+          type: array
+          items: { type: integer, format: int64 }
+        fit:
+          $ref: "#/components/schemas/ImageFit"
+        dither:
+          $ref: "#/components/schemas/ImageDither"
+        order:
+          type: string
+          enum: [sequential, shuffle]
+          default: sequential
+
+    Layout:
+      type: object
+      required: [key, name, slots]
+      properties:
+        key: { type: string, example: 1Lx2R }
+        name: { type: string }
+        slots:
+          type: array
+          description: Empty for the free layout.
+          items:
+            type: object
+            required: [key, view, x, y, w, h]
+            properties:
+              key: { type: string }
+              view: { type: string }
+              x: { type: number }
+              y: { type: number }
+              w: { type: number }
+              h: { type: number }
+
     ScreenSummary:
       type: object
-      required: [id, name, model_id, render_interval, updated_at]
+      required: [id, name, kind, layout, model_id, render_interval, updated_at]
       properties:
         id: { type: integer, format: int64 }
         name: { type: string }
+        kind:
+          $ref: "#/components/schemas/ScreenKind"
+        layout: { type: string }
         model_id: { type: integer, format: int64 }
         render_interval: { type: integer }
         updated_at: { type: string, format: date-time }
@@ -829,9 +941,11 @@ components:
       allOf:
         - $ref: "#/components/schemas/ScreenSummary"
         - type: object
-          required: [framework_version, head, regions]
+          required: [framework_version, head, regions, background]
           properties:
             framework_version: { type: string }
+            background:
+              $ref: "#/components/schemas/Background"
             head:
               type: string
               description: Extra HTML for the page head (styles).
@@ -846,23 +960,42 @@ components:
       properties:
         name: { type: string, minLength: 1, maxLength: 100 }
         model_id: { type: integer, format: int64 }
+        kind:
+          $ref: "#/components/schemas/ScreenKind"
 
     ScreenUpdate:
       type: object
-      required: [name, model_id, head, render_interval, regions]
+      required: [name, model_id, head, render_interval, layout, background, regions]
       properties:
         name: { type: string, minLength: 1, maxLength: 100 }
         model_id: { type: integer, format: int64 }
         head: { type: string, maxLength: 100000 }
         render_interval: { type: integer, minimum: 60, maximum: 86400 }
+        layout:
+          type: string
+          description: A layout key from /system layouts. Changing it adds or removes regions.
+        background:
+          $ref: "#/components/schemas/Background"
         regions:
           type: array
+          maxItems: 50
+          description: |
+            Region contents. For preset layouts regions are matched by id (or key) and their
+            rectangles come from the layout; for the free layout the list defines the regions
+            (omit id for new ones).
           items:
             type: object
-            required: [id, template]
+            required: [key, template]
             properties:
               id: { type: integer, format: int64 }
+              key: { type: string, minLength: 1, maxLength: 40, pattern: "^[a-z0-9_]+$" }
               template: { type: string, maxLength: 200000 }
+              transparent: { type: boolean }
+              x: { type: integer }
+              y: { type: integer }
+              w: { type: integer }
+              h: { type: integer }
+              z: { type: integer }
 
     PreviewRequest:
       type: object
@@ -953,6 +1086,20 @@ components:
           maxItems: 100
           items:
             $ref: "#/components/schemas/PlaylistItem"
+
+    Asset:
+      type: object
+      required: [id, name, url, width, height, size, created_at]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        url:
+          type: string
+          description: The original upload (for thumbnails).
+        width: { type: integer }
+        height: { type: integer }
+        size: { type: integer, format: int64 }
+        created_at: { type: string, format: date-time }
 
     Problem:
       description: RFC 9457 problem details.

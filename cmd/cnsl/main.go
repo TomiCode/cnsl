@@ -74,10 +74,14 @@ func run() error {
 		BaseURL:  cfg.RenderBaseURL,
 		Timezone: cfg.Timezone,
 		Log:      logger,
+
+		UploadsDir: cfg.UploadsDir(),
+		CacheDir:   cfg.CacheDir(),
 	})
 	scheduler := render.NewScheduler(renderer, st, broker, logger)
 	devices.SetScreens(scheduler)
 	go scheduler.Run(ctx)
+	go st.RunRetention(ctx, 30*24*time.Hour, 90*24*time.Hour, logger)
 
 	api, err := dashboard.NewServer(dashboard.Options{
 		Version:         version,
@@ -88,6 +92,7 @@ func run() error {
 		DevicePublicURL: cfg.DevicePublicURL,
 		Renderer:        renderer,
 		Scheduler:       scheduler,
+		UploadsDir:      cfg.UploadsDir(),
 	}).Handler()
 	if err != nil {
 		return err
@@ -108,6 +113,8 @@ func run() error {
 	// What the headless browser loads while rendering. The framework CSS hard-codes /fonts/.
 	dashMux.Handle("/internal/render/", renderer.Handler())
 	dashMux.Handle("/fonts/", http.StripPrefix("/fonts/", assets.FontsHandler()))
+	// Original uploads (content-hash names) for thumbnails in the dashboard.
+	dashMux.Handle("GET /uploads/", http.StripPrefix("/uploads/", httpx.Immutable(http.FileServer(http.Dir(cfg.UploadsDir())))))
 	dashMux.Handle("/", web.Handler())
 
 	servers := []*http.Server{

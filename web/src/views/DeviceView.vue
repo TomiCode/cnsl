@@ -4,7 +4,6 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, Ban, Check, Trash2 } from 'lucide-vue-next'
 import StatusBadge from '@/components/StatusBadge.vue'
 import DeviceOverview from './device/DeviceOverview.vue'
-import DeviceImage from './device/DeviceImage.vue'
 import DeviceLogs from './device/DeviceLogs.vue'
 import DeviceTelemetry from './device/DeviceTelemetry.vue'
 import DeviceCalibration from './device/DeviceCalibration.vue'
@@ -21,7 +20,6 @@ const busy = ref(false)
 
 const tabs = [
   { key: 'overview', label: 'Overview', component: DeviceOverview },
-  { key: 'image', label: 'Image', component: DeviceImage },
   { key: 'logs', label: 'Logs', component: DeviceLogs },
   { key: 'telemetry', label: 'Telemetry', component: DeviceTelemetry },
   { key: 'calibration', label: 'Calibration', component: DeviceCalibration },

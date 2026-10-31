@@ -12,6 +12,7 @@ export const router = createRouter({
     { path: '/screens', name: 'screens', component: () => import('./views/ScreensView.vue') },
     { path: '/screens/:id(\\d+)', name: 'screen', component: () => import('./views/ScreenEditorView.vue') },
     { path: '/playlists', name: 'playlists', component: () => import('./views/PlaylistsView.vue') },
+    { path: '/images', name: 'images', component: () => import('./views/AssetsView.vue') },
     { path: '/connectors', name: 'connectors', component: PlaceholderView, meta: { title: 'Connectors', phase: 4 } },
     { path: '/settings', name: 'settings', component: () => import('./views/SettingsView.vue') },
     { path: '/:pathMatch(.*)*', name: 'not-found', component: PlaceholderView, meta: { title: 'Not found' } },

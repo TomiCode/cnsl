@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 )
 
 type Screen struct {
@@ -15,6 +16,10 @@ type Screen struct {
 	RenderInterval   int    `db:"render_interval"`
 	CreatedAt        Time   `db:"created_at"`
 	UpdatedAt        Time   `db:"updated_at"`
+	Kind             string `db:"kind"`             // "template" | "image"
+	Layout           string `db:"layout"`           // "full", a mashup key, or "free"
+	Background       string `db:"background"`       // JSON, see render.Background
+	BackgroundIndex  int    `db:"background_index"` // slideshow position
 }
 
 type Region struct {
@@ -70,9 +75,20 @@ func (s *Store) CreateScreen(ctx context.Context, sc *Screen, regions []Region) 
 
 	now := Now()
 	sc.CreatedAt, sc.UpdatedAt = now, now
+	if sc.Kind == "" {
+		sc.Kind = "template"
+	}
+	if sc.Layout == "" {
+		sc.Layout = "full"
+	}
+	if sc.Background == "" {
+		sc.Background = `{"kind":"none"}`
+	}
 	res, err := tx.NamedExecContext(ctx, `
-		INSERT INTO screens (name, model_id, framework_version, head, render_interval, created_at, updated_at)
-		VALUES (:name, :model_id, :framework_version, :head, :render_interval, :created_at, :updated_at)`, sc)
+		INSERT INTO screens (name, model_id, framework_version, head, render_interval, created_at, updated_at,
+			kind, layout, background)
+		VALUES (:name, :model_id, :framework_version, :head, :render_interval, :created_at, :updated_at,
+			:kind, :layout, :background)`, sc)
 	if err != nil {
 		return fmt.Errorf("insert screen: %w", err)
 	}
@@ -94,7 +110,8 @@ func (s *Store) CreateScreen(ctx context.Context, sc *Screen, regions []Region) 
 	return tx.Commit()
 }
 
-// UpdateScreen writes the screen row and the given regions (matched by id).
+// UpdateScreen writes the screen row and makes its regions exactly the given list: regions with
+// an id are updated, without an id inserted, and regions not in the list deleted.
 func (s *Store) UpdateScreen(ctx context.Context, sc *Screen, regions []Region) error {
 	tx, err := s.DB.BeginTxx(ctx, nil)
 	if err != nil {
@@ -105,7 +122,8 @@ func (s *Store) UpdateScreen(ctx context.Context, sc *Screen, regions []Region) 
 	sc.UpdatedAt = Now()
 	res, err := tx.NamedExecContext(ctx, `
 		UPDATE screens SET name = :name, model_id = :model_id, framework_version = :framework_version,
-			head = :head, render_interval = :render_interval, updated_at = :updated_at
+			head = :head, render_interval = :render_interval, updated_at = :updated_at,
+			kind = :kind, layout = :layout, background = :background
 		WHERE id = :id`, sc)
 	if err != nil {
 		return fmt.Errorf("update screen: %w", err)
@@ -113,15 +131,43 @@ func (s *Store) UpdateScreen(ctx context.Context, sc *Screen, regions []Region) 
 	if err := affected(res); err != nil {
 		return err
 	}
+
+	keep := []any{sc.ID}
 	for i := range regions {
-		if _, err := tx.NamedExecContext(ctx, `
-			UPDATE regions SET key = :key, x = :x, y = :y, w = :w, h = :h, z = :z,
-				template = :template, class = :class, transparent = :transparent
-			WHERE id = :id AND screen_id = :screen_id`, &regions[i]); err != nil {
-			return fmt.Errorf("update region: %w", err)
+		r := &regions[i]
+		r.ScreenID = sc.ID
+		if r.ID != 0 {
+			if _, err := tx.NamedExecContext(ctx, `
+				UPDATE regions SET key = :key, x = :x, y = :y, w = :w, h = :h, z = :z,
+					template = :template, class = :class, transparent = :transparent
+				WHERE id = :id AND screen_id = :screen_id`, r); err != nil {
+				return fmt.Errorf("update region: %w", err)
+			}
+		} else {
+			res, err := tx.NamedExecContext(ctx, `
+				INSERT INTO regions (screen_id, key, x, y, w, h, z, template, class, transparent)
+				VALUES (:screen_id, :key, :x, :y, :w, :h, :z, :template, :class, :transparent)`, r)
+			if err != nil {
+				return fmt.Errorf("insert region: %w", err)
+			}
+			if r.ID, err = res.LastInsertId(); err != nil {
+				return err
+			}
 		}
+		keep = append(keep, r.ID)
+	}
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(keep)-1), ",")
+	if _, err := tx.ExecContext(ctx,
+		`DELETE FROM regions WHERE screen_id = ? AND id NOT IN (`+placeholders+`)`, keep...); err != nil {
+		return err
 	}
 	return tx.Commit()
+}
+
+// SetBackgroundIndex stores the slideshow position of a screen.
+func (s *Store) SetBackgroundIndex(ctx context.Context, screenID int64, index int) error {
+	_, err := s.DB.ExecContext(ctx, `UPDATE screens SET background_index = ? WHERE id = ?`, index, screenID)
+	return err
 }
 
 func (s *Store) DeleteScreen(ctx context.Context, id int64) error {
@@ -162,7 +208,7 @@ func (s *Store) Renders(ctx context.Context, screenID int64, limit int) ([]Rende
 }
 
 // PruneRenders keeps the newest keep renders per screen and returns the filenames of deleted
-// rows that no remaining render or device still references.
+// rows that no remaining render still references.
 func (s *Store) PruneRenders(ctx context.Context, screenID int64, keep int) ([]string, error) {
 	var names []string
 	err := s.DB.SelectContext(ctx, &names, `
@@ -183,8 +229,7 @@ func (s *Store) PruneRenders(ctx context.Context, screenID int64, keep int) ([]s
 	for _, n := range names {
 		var refs int
 		if err := s.DB.GetContext(ctx, &refs, `
-			SELECT (SELECT COUNT(*) FROM renders WHERE filename = ?) + (SELECT COUNT(*) FROM devices WHERE image_filename = ?)`,
-			n, n); err != nil {
+			SELECT COUNT(*) FROM renders WHERE filename = ?`, n); err != nil {
 			return nil, err
 		}
 		if refs == 0 {

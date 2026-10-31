@@ -91,3 +91,46 @@ func TestToneCurve(t *testing.T) {
 		t.Fatal("narrow range should be invalid")
 	}
 }
+
+func TestDitherMethodsPreserveAverage(t *testing.T) {
+	src := image.NewGray(image.Rect(0, 0, 64, 64))
+	for i := range src.Pix {
+		src.Pix[i] = 90
+	}
+	for _, d := range []Dither{DitherFloydSteinberg, DitherAtkinson, DitherOrdered} {
+		out := Expand(Quantize(src, 1, d), 1)
+		sum := 0
+		for _, v := range out.Pix {
+			sum += int(v)
+		}
+		// Atkinson drops 1/4 of the error, so it may drift a little more.
+		if avg := sum / len(out.Pix); avg < 70 || avg > 110 {
+			t.Errorf("%s: average %d, want ≈90", d, avg)
+		}
+	}
+}
+
+// Pre-dithered pixels must survive the page pipeline (curve, then nearest level) unchanged.
+func TestForPageRoundTrip(t *testing.T) {
+	for _, curve := range []ToneCurve{LinearCurve, {Gamma: 1.8, Black: 0.1, White: 0.92}, {Gamma: 0.6, Black: 0, White: 1}} {
+		levels := Quantize(gradient(256, 4), 4, DitherFloydSteinberg)
+		page := ForPage(levels, curve, 4)
+		back := Quantize(curve.Apply(page), 4, DitherNone)
+		for i := range levels.Pix {
+			if back.Pix[i] != levels.Pix[i] {
+				// A level the curve clips away can't round-trip; it must land on a neighbor.
+				if d := int(back.Pix[i]) - int(levels.Pix[i]); d < -2 || d > 2 {
+					t.Fatalf("curve %+v: level %d came back as %d", curve, levels.Pix[i], back.Pix[i])
+				}
+			}
+		}
+	}
+	// With a linear curve every level is reachable, so the round trip is exact.
+	levels := Quantize(gradient(256, 1), 4, DitherNone)
+	back := Quantize(LinearCurve.Apply(ForPage(levels, LinearCurve, 4)), 4, DitherNone)
+	for i := range levels.Pix {
+		if back.Pix[i] != levels.Pix[i] {
+			t.Fatalf("linear: level %d came back as %d", levels.Pix[i], back.Pix[i])
+		}
+	}
+}
