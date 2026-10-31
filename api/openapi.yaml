@@ -1,0 +1,73 @@
+openapi: 3.0.3
+info:
+  title: cnsl dashboard API
+  version: 0.1.0
+  description: |
+    API used by the cnsl web dashboard. Device (firmware) endpoints are not part of this spec;
+    they are served on the separate device listener.
+servers:
+  - url: /api/v1
+
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      summary: Liveness and dependency status
+      tags: [system]
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+        "503":
+          description: Service is degraded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+
+components:
+  schemas:
+    Health:
+      type: object
+      required: [status, version, database]
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded]
+        version:
+          type: string
+          example: 0.1.0
+        database:
+          type: string
+          enum: [ok, error]
+
+    Problem:
+      description: RFC 9457 problem details.
+      type: object
+      required: [title, status]
+      properties:
+        type:
+          type: string
+          default: about:blank
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        errors:
+          type: array
+          items:
+            $ref: "#/components/schemas/FieldError"
+
+    FieldError:
+      type: object
+      required: [message]
+      properties:
+        field:
+          type: string
+        message:
+          type: string

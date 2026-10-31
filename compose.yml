@@ -1,0 +1,28 @@
+services:
+  cnsl:
+    build: .
+    image: cnsl:local
+    restart: unless-stopped
+    ports:
+      - "8080:8080" # dashboard — keep on LAN/VPN, there is no auth yet
+      - "8081:8081" # device API — what the TRMNL devices talk to
+    environment:
+      # Address of the device listener as the devices see it (your host's LAN IP).
+      CNSL_DEVICE_PUBLIC_URL: http://192.168.1.10:8081
+      CNSL_DASHBOARD_ORIGIN: http://192.168.1.10:8080
+      CNSL_CHROME_URL: http://chrome:9222
+      CNSL_RENDER_BASE_URL: http://cnsl:8080
+      TZ: Etc/UTC # your household timezone, e.g. Europe/Vienna
+    volumes:
+      - cnsl-data:/data
+    depends_on:
+      - chrome
+
+  # Headless Chrome used to render screens (from phase 2). Not exposed outside the compose network.
+  chrome:
+    image: chromedp/headless-shell:stable # pin a version tag once rendering lands
+    restart: unless-stopped
+    shm_size: 1g
+
+volumes:
+  cnsl-data:
