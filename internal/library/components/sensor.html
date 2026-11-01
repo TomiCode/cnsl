@@ -1,0 +1,11 @@
+{{- with .entity }}
+<div class="item">
+  <div class="meta"></div>
+  <div class="content">
+    <span class="value value--tnums">{{ if .numeric }}{{ num $.places .value }}{{ else }}{{ .state }}{{ end }}{{ with .unit }} {{ . }}{{ end }}</span>
+    <span class="label">{{ default .name $.label }}</span>
+  </div>
+</div>
+{{- else }}
+<span class="label">No sensor data</span>
+{{- end }}

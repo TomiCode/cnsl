@@ -1,0 +1,16 @@
+{{- with .entities }}
+<div class="layout layout--col layout--top">
+<table class="table">
+  <tbody>
+  {{- range . }}
+    <tr>
+      <td><span class="title title--small">{{ .name }}</span></td>
+      <td class="text--right"><span class="label">{{ if .numeric }}{{ num $.places .value }}{{ else }}{{ .state }}{{ end }}{{ with .unit }} {{ . }}{{ end }}</span></td>
+    </tr>
+  {{- end }}
+  </tbody>
+</table>
+</div>
+{{- else }}
+<span class="label">No sensor data</span>
+{{- end }}

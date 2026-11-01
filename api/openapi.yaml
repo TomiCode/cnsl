@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: cnsl dashboard API
-  version: 0.6.0
+  version: 0.7.0
   description: |
     API used by the cnsl web dashboard. Device (firmware) endpoints are not part of this spec;
     they are served on the separate device listener (and mirrored under /device on the
@@ -16,6 +16,8 @@ tags:
   - name: playlists
   - name: assets
   - name: connectors
+  - name: library
+    description: Components and editor snippets.
   - name: stream
     description: Server-Sent Events. Implemented by hand (not generated) because it streams.
 
@@ -607,6 +609,189 @@ paths:
         "404":
           $ref: "#/components/responses/Problem"
 
+  /components:
+    get:
+      operationId: listComponents
+      tags: [library]
+      responses:
+        "200":
+          description: Built-in and user components
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Component"
+    post:
+      operationId: createComponent
+      tags: [library]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ComponentInput"
+      responses:
+        "201":
+          $ref: "#/components/responses/Component"
+        "422":
+          $ref: "#/components/responses/TemplateProblem"
+
+  /components/preview:
+    post:
+      operationId: previewComponent
+      summary: Render a (possibly unsaved) component on its own with sample data
+      tags: [library]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ComponentPreviewRequest"
+      responses:
+        "200":
+          description: Rendered preview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Preview"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/TemplateProblem"
+        "503":
+          $ref: "#/components/responses/Problem"
+
+  /components/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ComponentID"
+    get:
+      operationId: getComponent
+      tags: [library]
+      responses:
+        "200":
+          $ref: "#/components/responses/Component"
+        "404":
+          $ref: "#/components/responses/Problem"
+    put:
+      operationId: updateComponent
+      summary: Update a user component and re-render the screens that use it
+      tags: [library]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ComponentInput"
+      responses:
+        "200":
+          $ref: "#/components/responses/Component"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          description: Built-in components are read-only; a used component cannot change its key
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          $ref: "#/components/responses/TemplateProblem"
+    delete:
+      operationId: deleteComponent
+      tags: [library]
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          description: Built-in, or still used by a screen
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+
+  /components/{id}/duplicate:
+    parameters:
+      - $ref: "#/components/parameters/ComponentID"
+    post:
+      operationId: duplicateComponent
+      summary: Copy a component (e.g. a built-in) into an editable user component
+      tags: [library]
+      responses:
+        "201":
+          $ref: "#/components/responses/Component"
+        "404":
+          $ref: "#/components/responses/Problem"
+
+  /snippets:
+    get:
+      operationId: listSnippets
+      tags: [library]
+      responses:
+        "200":
+          description: Built-in and user editor snippets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Snippet"
+    post:
+      operationId: createSnippet
+      tags: [library]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SnippetInput"
+      responses:
+        "201":
+          $ref: "#/components/responses/Snippet"
+        "422":
+          $ref: "#/components/responses/Problem"
+
+  /snippets/{id}:
+    parameters:
+      - $ref: "#/components/parameters/SnippetID"
+    put:
+      operationId: updateSnippet
+      tags: [library]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SnippetInput"
+      responses:
+        "200":
+          $ref: "#/components/responses/Snippet"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          description: Built-in snippets are read-only
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: deleteSnippet
+      tags: [library]
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          description: Built-in snippets are read-only
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+
   /connector-types:
     get:
       operationId: listConnectorTypes
@@ -800,6 +985,16 @@ components:
       in: path
       required: true
       schema: { type: integer, format: int64 }
+    ComponentID:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer, format: int64 }
+    SnippetID:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer, format: int64 }
     AssetID:
       name: id
       in: path
@@ -835,6 +1030,24 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/Connector"
+    Component:
+      description: The component
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Component"
+    Snippet:
+      description: The snippet
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Snippet"
+    TemplateProblem:
+      description: Invalid input or template syntax errors
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/TemplateProblem"
     Problem:
       description: Error
       content:
@@ -1297,6 +1510,105 @@ components:
         height: { type: integer }
         size: { type: integer, format: int64 }
         created_at: { type: string, format: date-time }
+
+    ComponentParam:
+      type: object
+      required: [name, kind]
+      properties:
+        name:
+          type: string
+          pattern: "^[A-Za-z_][A-Za-z0-9_]*$"
+          description: Field name inside the component (.name).
+        label: { type: string }
+        kind:
+          type: string
+          enum: [data, string, number, bool]
+        connector:
+          type: string
+          description: Connector type a data input expects (insert flow, preview samples).
+        default: {}
+        help: { type: string }
+        sample:
+          description: Example value for previews; data inputs fall back to the connector's sample.
+
+    Component:
+      type: object
+      required: [id, key, name, description, source, inputs, builtin, used_by, updated_at]
+      properties:
+        id: { type: integer, format: int64 }
+        key: { type: string }
+        name: { type: string }
+        description: { type: string }
+        source: { type: string }
+        inputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/ComponentParam"
+        builtin: { type: boolean }
+        used_by:
+          type: array
+          description: Ids of screens whose templates call this component.
+          items: { type: integer, format: int64 }
+        updated_at: { type: string, format: date-time }
+
+    ComponentInput:
+      type: object
+      required: [key, name, source, inputs]
+      properties:
+        key:
+          type: string
+          pattern: "^[a-z][a-z0-9-]*$"
+          maxLength: 60
+        name: { type: string, minLength: 1, maxLength: 100 }
+        description: { type: string, maxLength: 500 }
+        source: { type: string, maxLength: 200000 }
+        inputs:
+          type: array
+          maxItems: 30
+          items:
+            $ref: "#/components/schemas/ComponentParam"
+
+    ComponentPreviewRequest:
+      type: object
+      required: [model_id, component]
+      properties:
+        model_id: { type: integer, format: int64 }
+        component:
+          $ref: "#/components/schemas/ComponentInput"
+        view:
+          type: string
+          enum: [full, half_vertical, half_horizontal, quadrant]
+          default: full
+        values:
+          type: object
+          description: Input values by name; other inputs use their sample or default.
+          additionalProperties: true
+
+    Snippet:
+      type: object
+      required: [id, prefix, name, description, body, builtin, updated_at]
+      properties:
+        id: { type: integer, format: int64 }
+        prefix: { type: string }
+        name: { type: string }
+        description: { type: string }
+        body:
+          type: string
+          description: Monaco snippet syntax ($1, ${1:default}, $0).
+        builtin: { type: boolean }
+        updated_at: { type: string, format: date-time }
+
+    SnippetInput:
+      type: object
+      required: [prefix, name, body]
+      properties:
+        prefix:
+          type: string
+          pattern: "^[A-Za-z_][A-Za-z0-9_-]*$"
+          maxLength: 40
+        name: { type: string, minLength: 1, maxLength: 100 }
+        description: { type: string, maxLength: 500 }
+        body: { type: string, minLength: 1, maxLength: 20000 }
 
     ConnectorField:
       type: object

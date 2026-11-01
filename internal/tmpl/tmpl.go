@@ -56,9 +56,11 @@ func (e *Error) Error() string {
 
 const maxOutput = 2 << 20 // a region's HTML may not exceed 2 MiB
 
-// Render parses and executes a region template. Errors are returned as *Error.
-func Render(region, src string, ctx Context) (template.HTML, error) {
-	t, err := template.New(region).Option("missingkey=zero").Funcs(funcs).Parse(src)
+// Render parses and executes a region template. lib resolves {{ component … }} calls (nil = no
+// components). Errors are returned as *Error.
+func Render(region, src string, ctx Context, lib Library) (template.HTML, error) {
+	calls := &componentCaller{lib: lib, parent: ctx, parsed: map[string]*template.Template{}}
+	t, err := template.New(region).Option("missingkey=zero").Funcs(funcs).Funcs(calls.funcs()).Parse(src)
 	if err != nil {
 		return "", toError(region, err)
 	}

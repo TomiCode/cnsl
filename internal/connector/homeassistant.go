@@ -79,8 +79,9 @@ func haEntity(s haState) map[string]any {
 		"attributes":   s.Attributes,
 		"last_changed": s.LastChanged,
 	}
+	e["numeric"] = false
 	if v, err := strconv.ParseFloat(s.State, 64); err == nil {
-		e["value"] = v // numeric states, ready for num/round
+		e["value"], e["numeric"] = v, true // numeric states, ready for num/round
 	}
 	return e
 }

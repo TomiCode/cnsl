@@ -14,6 +14,7 @@ export const router = createRouter({
     { path: '/playlists', name: 'playlists', component: () => import('./views/PlaylistsView.vue') },
     { path: '/images', name: 'images', component: () => import('./views/AssetsView.vue') },
     { path: '/connectors', name: 'connectors', component: () => import('./views/ConnectorsView.vue') },
+    { path: '/library', name: 'library', component: () => import('./views/LibraryView.vue') },
     { path: '/settings', name: 'settings', component: () => import('./views/SettingsView.vue') },
     { path: '/:pathMatch(.*)*', name: 'not-found', component: PlaceholderView, meta: { title: 'Not found' } },
   ],

@@ -13,7 +13,7 @@ func TestRender(t *testing.T) {
 		Region: RegionInfo{Key: "main", Width: 800, Height: 480},
 		Data:   map[string]any{"temp": 21.456},
 	}
-	out, err := Render("main", `<b>{{ date "Mon 2 Jan" .Now }}</b> {{ num 1 .Data.temp }}°{{ default "—" .Data.missing }} <i>{{ "<x>" }}</i>`, ctx)
+	out, err := Render("main", `<b>{{ date "Mon 2 Jan" .Now }}</b> {{ num 1 .Data.temp }}°{{ default "—" .Data.missing }} <i>{{ "<x>" }}</i>`, ctx, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -24,7 +24,7 @@ func TestRender(t *testing.T) {
 }
 
 func TestErrorPositions(t *testing.T) {
-	_, err := Render("main", "line one\n{{ .Now.Foo }}", Context{})
+	_, err := Render("main", "line one\n{{ .Now.Foo }}", Context{}, nil)
 	var e *Error
 	if !errors.As(err, &e) || e.Line != 2 || e.Region != "main" {
 		t.Fatalf("exec error = %#v", err)
@@ -40,7 +40,7 @@ func TestErrorPositions(t *testing.T) {
 }
 
 func TestOutputLimit(t *testing.T) {
-	_, err := Render("main", `{{ range seq 3000000 }}x{{ end }}`, Context{})
+	_, err := Render("main", `{{ range seq 3000000 }}x{{ end }}`, Context{}, nil)
 	var e *Error
 	if !errors.As(err, &e) || !strings.Contains(e.Message, "too large") {
 		t.Fatalf("err = %v", err)

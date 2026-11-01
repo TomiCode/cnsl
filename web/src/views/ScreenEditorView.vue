@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { RouterLink, onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, CircleAlert, CircleCheck, Eye, Loader2, Play, Plus, Save, Trash2, X } from 'lucide-vue-next'
+import { ArrowLeft, Blocks, CircleAlert, CircleCheck, Eye, Loader2, Play, Plus, Save, Trash2, X } from 'lucide-vue-next'
 import CodeEditor from '@/components/CodeEditor.vue'
 import BackgroundPanel from '@/components/BackgroundPanel.vue'
 import DataPanel from '@/components/DataPanel.vue'
@@ -11,6 +11,8 @@ import { api, type Schemas } from '@/api/client'
 import { ApiError, unwrap, useDevicesStore } from '@/stores/devices'
 import { useEventsStore } from '@/stores/events'
 import { useScreensStore } from '@/stores/screens'
+import { useConnectorsStore } from '@/stores/connectors'
+import { callFor, useLibraryStore, type Component } from '@/stores/library'
 import { dateTime, duration, imageUrl, timeAgo } from '@/lib/format'
 import type { TemplateError } from '@/lib/monaco'
 
@@ -31,6 +33,8 @@ const route = useRoute()
 const router = useRouter()
 const devices = useDevicesStore()
 const screensStore = useScreensStore()
+const library = useLibraryStore()
+const connectors = useConnectorsStore()
 const id = computed(() => Number(route.params.id))
 
 const screen = ref<Schemas['Screen'] | null>(null)
@@ -117,6 +121,7 @@ onMounted(async () => {
       api.GET('/screens/{id}', { params: { path: { id: id.value } } }),
       api.GET('/system'),
       devices.loaded ? Promise.resolve() : devices.load(),
+      library.ensure(),
     ])
     const system = unwrap(sys)
     functions.value = system.template_functions
@@ -259,6 +264,48 @@ const beforeUnload = (e: BeforeUnloadEvent) => {
 window.addEventListener('beforeunload', beforeUnload)
 onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
 
+// Insert a component call at the cursor, wired to a binding of the connector type it expects.
+const picker = ref(false)
+async function insertComponent(c: Component) {
+  picker.value = false
+  const region = activeRegion.value
+  if (!region) return
+  try {
+    const [bindings] = await Promise.all([
+      api.GET('/screens/{id}/bindings', { params: { path: { id: id.value } } }).then(unwrap),
+      connectors.loaded ? Promise.resolve() : connectors.load(),
+    ])
+    const visible = bindings.filter((b) => b.enabled && (!b.region_key || b.region_key === region.key))
+    const args: Record<string, string> = {}
+    const missing: string[] = []
+    for (const i of c.inputs.filter((i) => i.kind === 'data')) {
+      const b = visible.find((b) => !i.connector || connectors.byId(b.connector_id)?.type === i.connector)
+      if (!b) {
+        missing.push(connectors.typeOf(i.connector)?.name ?? 'data')
+        continue
+      }
+      args[i.name] = `.Data.${b.alias}` + itemPath(i.sample, screenData.value[b.alias]?.data)
+    }
+    editor.value?.insert(callFor(c, args) + '\n')
+    message.value = missing.length
+      ? { ok: false, text: `No ${missing.join(', ')} binding for this region yet — add one in the Data tab and fix the .Data path` }
+      : null
+  } catch (e) {
+    message.value = { ok: false, text: (e as Error).message }
+  }
+}
+
+// An input whose sample looks like one entry of a keyed binding (a Home Assistant entity, say)
+// gets the binding's first entry: ".sensor_outdoor_temperature".
+function itemPath(sample: unknown, data: unknown): string {
+  if (!isObject(sample) || !isObject(data)) return ''
+  const first = Object.entries(data).find(([, v]) => isObject(v))
+  if (!first) return ''
+  const shared = Object.keys(sample).filter((k) => k in (first[1] as object)).length
+  return shared >= 2 && /^[A-Za-z_]\w*$/.test(first[0]) ? `.${first[0]}` : ''
+}
+const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
+
 function reveal(e: TemplateError) {
   tab.value = e.region
   setTimeout(() => editor.value?.revealLine(e.line))
@@ -349,7 +396,27 @@ const num = 'w-20 rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm f
               <input v-model="activeRegion.transparent" type="checkbox" />
               transparent (show the background through)
             </label>
-            <span class="ml-auto">{{ activeRegion.w }}×{{ activeRegion.h }} px</span>
+            <div class="relative ml-auto">
+              <button type="button" class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900" @click="picker = !picker">
+                <Blocks class="size-3.5" />
+                Insert component
+              </button>
+              <div v-if="picker" class="absolute right-0 z-20 mt-1 max-h-96 w-80 overflow-y-auto rounded-md border border-zinc-200 bg-white py-1 shadow-lg">
+                <button
+                  v-for="c in library.components"
+                  :key="c.id"
+                  type="button"
+                  class="block w-full px-3 py-1.5 text-left hover:bg-zinc-50"
+                  @click="insertComponent(c)"
+                >
+                  <span class="text-sm text-zinc-900">{{ c.name }}</span>
+                  <span class="ml-1 font-mono text-[10px] text-zinc-400">{{ c.key }}</span>
+                  <span class="block text-xs text-zinc-500">{{ c.description }}</span>
+                </button>
+                <RouterLink to="/library" class="block border-t border-zinc-100 px-3 py-1.5 text-xs text-zinc-500 hover:text-zinc-900">Manage components…</RouterLink>
+              </div>
+            </div>
+            <span>{{ activeRegion.w }}×{{ activeRegion.h }} px</span>
           </div>
           <div class="min-h-0 flex-1">
             <CodeEditor

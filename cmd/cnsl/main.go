@@ -23,6 +23,7 @@ import (
 	"github.com/TomiCode/cnsl/internal/firmware"
 	"github.com/TomiCode/cnsl/internal/httpx"
 	"github.com/TomiCode/cnsl/internal/imaging"
+	"github.com/TomiCode/cnsl/internal/library"
 	"github.com/TomiCode/cnsl/internal/render"
 	"github.com/TomiCode/cnsl/internal/secret"
 	"github.com/TomiCode/cnsl/internal/store"
@@ -58,6 +59,9 @@ func run() error {
 		return err
 	}
 	defer st.Close()
+	if err := library.Seed(ctx, st); err != nil {
+		return fmt.Errorf("seed component library: %w", err)
+	}
 
 	if cfg.DevicePublicURL == "" {
 		logger.Warn("CNSL_DEVICE_PUBLIC_URL is not set; devices will not be able to download images")

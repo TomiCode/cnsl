@@ -65,39 +65,87 @@ func (e BackgroundOrder) Valid() bool {
 	}
 }
 
+// Defines values for ComponentParamKind.
+const (
+	ComponentParamKindBool   ComponentParamKind = "bool"
+	ComponentParamKindData   ComponentParamKind = "data"
+	ComponentParamKindNumber ComponentParamKind = "number"
+	ComponentParamKindString ComponentParamKind = "string"
+)
+
+// Valid indicates whether the value is a known member of the ComponentParamKind enum.
+func (e ComponentParamKind) Valid() bool {
+	switch e {
+	case ComponentParamKindBool:
+		return true
+	case ComponentParamKindData:
+		return true
+	case ComponentParamKindNumber:
+		return true
+	case ComponentParamKindString:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ComponentPreviewRequestView.
+const (
+	Full           ComponentPreviewRequestView = "full"
+	HalfHorizontal ComponentPreviewRequestView = "half_horizontal"
+	HalfVertical   ComponentPreviewRequestView = "half_vertical"
+	Quadrant       ComponentPreviewRequestView = "quadrant"
+)
+
+// Valid indicates whether the value is a known member of the ComponentPreviewRequestView enum.
+func (e ComponentPreviewRequestView) Valid() bool {
+	switch e {
+	case Full:
+		return true
+	case HalfHorizontal:
+		return true
+	case HalfVertical:
+		return true
+	case Quadrant:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ConnectorFieldKind.
 const (
-	Bool   ConnectorFieldKind = "bool"
-	Int    ConnectorFieldKind = "int"
-	List   ConnectorFieldKind = "list"
-	Number ConnectorFieldKind = "number"
-	Secret ConnectorFieldKind = "secret"
-	Select ConnectorFieldKind = "select"
-	String ConnectorFieldKind = "string"
-	Text   ConnectorFieldKind = "text"
-	Url    ConnectorFieldKind = "url"
+	ConnectorFieldKindBool   ConnectorFieldKind = "bool"
+	ConnectorFieldKindInt    ConnectorFieldKind = "int"
+	ConnectorFieldKindList   ConnectorFieldKind = "list"
+	ConnectorFieldKindNumber ConnectorFieldKind = "number"
+	ConnectorFieldKindSecret ConnectorFieldKind = "secret"
+	ConnectorFieldKindSelect ConnectorFieldKind = "select"
+	ConnectorFieldKindString ConnectorFieldKind = "string"
+	ConnectorFieldKindText   ConnectorFieldKind = "text"
+	ConnectorFieldKindUrl    ConnectorFieldKind = "url"
 )
 
 // Valid indicates whether the value is a known member of the ConnectorFieldKind enum.
 func (e ConnectorFieldKind) Valid() bool {
 	switch e {
-	case Bool:
+	case ConnectorFieldKindBool:
 		return true
-	case Int:
+	case ConnectorFieldKindInt:
 		return true
-	case List:
+	case ConnectorFieldKindList:
 		return true
-	case Number:
+	case ConnectorFieldKindNumber:
 		return true
-	case Secret:
+	case ConnectorFieldKindSecret:
 		return true
-	case Select:
+	case ConnectorFieldKindSelect:
 		return true
-	case String:
+	case ConnectorFieldKindString:
 		return true
-	case Text:
+	case ConnectorFieldKindText:
 		return true
-	case Url:
+	case ConnectorFieldKindUrl:
 		return true
 	default:
 		return false
@@ -350,6 +398,62 @@ type BindingData struct {
 	FetchedAt *time.Time  `json:"fetched_at,omitempty"`
 	Stale     bool        `json:"stale"`
 }
+
+// Component defines model for Component.
+type Component struct {
+	Builtin     bool             `json:"builtin"`
+	Description string           `json:"description"`
+	Id          int64            `json:"id"`
+	Inputs      []ComponentParam `json:"inputs"`
+	Key         string           `json:"key"`
+	Name        string           `json:"name"`
+	Source      string           `json:"source"`
+	UpdatedAt   time.Time        `json:"updated_at"`
+
+	// UsedBy Ids of screens whose templates call this component.
+	UsedBy []int64 `json:"used_by"`
+}
+
+// ComponentInput defines model for ComponentInput.
+type ComponentInput struct {
+	Description *string          `json:"description,omitempty"`
+	Inputs      []ComponentParam `json:"inputs"`
+	Key         string           `json:"key"`
+	Name        string           `json:"name"`
+	Source      string           `json:"source"`
+}
+
+// ComponentParam defines model for ComponentParam.
+type ComponentParam struct {
+	// Connector Connector type a data input expects (insert flow, preview samples).
+	Connector *string            `json:"connector,omitempty"`
+	Default   interface{}        `json:"default,omitempty"`
+	Help      *string            `json:"help,omitempty"`
+	Kind      ComponentParamKind `json:"kind"`
+	Label     *string            `json:"label,omitempty"`
+
+	// Name Field name inside the component (.name).
+	Name string `json:"name"`
+
+	// Sample Example value for previews; data inputs fall back to the connector's sample.
+	Sample interface{} `json:"sample,omitempty"`
+}
+
+// ComponentParamKind defines model for ComponentParam.Kind.
+type ComponentParamKind string
+
+// ComponentPreviewRequest defines model for ComponentPreviewRequest.
+type ComponentPreviewRequest struct {
+	Component ComponentInput `json:"component"`
+	ModelId   int64          `json:"model_id"`
+
+	// Values Input values by name; other inputs use their sample or default.
+	Values *map[string]interface{}      `json:"values,omitempty"`
+	View   *ComponentPreviewRequestView `json:"view,omitempty"`
+}
+
+// ComponentPreviewRequestView defines model for ComponentPreviewRequest.View.
+type ComponentPreviewRequestView string
 
 // Connector defines model for Connector.
 type Connector struct {
@@ -730,6 +834,26 @@ type ScreenUpdate struct {
 	RenderInterval int `json:"render_interval"`
 }
 
+// Snippet defines model for Snippet.
+type Snippet struct {
+	// Body Monaco snippet syntax ($1, ${1:default}, $0).
+	Body        string    `json:"body"`
+	Builtin     bool      `json:"builtin"`
+	Description string    `json:"description"`
+	Id          int64     `json:"id"`
+	Name        string    `json:"name"`
+	Prefix      string    `json:"prefix"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// SnippetInput defines model for SnippetInput.
+type SnippetInput struct {
+	Body        string  `json:"body"`
+	Description *string `json:"description,omitempty"`
+	Name        string  `json:"name"`
+	Prefix      string  `json:"prefix"`
+}
+
 // SystemInfo defines model for SystemInfo.
 type SystemInfo struct {
 	// DevicePublicUrl Base URL devices use to reach the device listener; empty if not configured.
@@ -802,6 +926,9 @@ type ToneCurve struct {
 // AssetID defines model for AssetID.
 type AssetID = int64
 
+// ComponentID defines model for ComponentID.
+type ComponentID = int64
+
 // ConnectorID defines model for ConnectorID.
 type ConnectorID = int64
 
@@ -819,6 +946,9 @@ type PlaylistID = int64
 
 // ScreenID defines model for ScreenID.
 type ScreenID = int64
+
+// SnippetID defines model for SnippetID.
+type SnippetID = int64
 
 // UploadAssetMultipartBody defines parameters for UploadAsset.
 type UploadAssetMultipartBody struct {
@@ -879,6 +1009,15 @@ type UploadAssetMultipartRequestBody UploadAssetMultipartBody
 // PreviewAssetJSONRequestBody defines body for PreviewAsset for application/json ContentType.
 type PreviewAssetJSONRequestBody PreviewAssetJSONBody
 
+// CreateComponentJSONRequestBody defines body for CreateComponent for application/json ContentType.
+type CreateComponentJSONRequestBody = ComponentInput
+
+// PreviewComponentJSONRequestBody defines body for PreviewComponent for application/json ContentType.
+type PreviewComponentJSONRequestBody = ComponentPreviewRequest
+
+// UpdateComponentJSONRequestBody defines body for UpdateComponent for application/json ContentType.
+type UpdateComponentJSONRequestBody = ComponentInput
+
 // CreateConnectorJSONRequestBody defines body for CreateConnector for application/json ContentType.
 type CreateConnectorJSONRequestBody = ConnectorInput
 
@@ -918,6 +1057,12 @@ type ReplaceBindingsJSONRequestBody = ReplaceBindingsJSONBody
 // PreviewScreenJSONRequestBody defines body for PreviewScreen for application/json ContentType.
 type PreviewScreenJSONRequestBody = PreviewRequest
 
+// CreateSnippetJSONRequestBody defines body for CreateSnippet for application/json ContentType.
+type CreateSnippetJSONRequestBody = SnippetInput
+
+// UpdateSnippetJSONRequestBody defines body for UpdateSnippet for application/json ContentType.
+type UpdateSnippetJSONRequestBody = SnippetInput
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 
@@ -932,6 +1077,27 @@ type ServerInterface interface {
 	// PreviewAsset Show an image as a device model would display it
 	// (POST /assets/{id}/preview)
 	PreviewAsset(w http.ResponseWriter, r *http.Request, id AssetID)
+
+	// (GET /components)
+	ListComponents(w http.ResponseWriter, r *http.Request)
+
+	// (POST /components)
+	CreateComponent(w http.ResponseWriter, r *http.Request)
+	// PreviewComponent Render a (possibly unsaved) component on its own with sample data
+	// (POST /components/preview)
+	PreviewComponent(w http.ResponseWriter, r *http.Request)
+
+	// (DELETE /components/{id})
+	DeleteComponent(w http.ResponseWriter, r *http.Request, id ComponentID)
+
+	// (GET /components/{id})
+	GetComponent(w http.ResponseWriter, r *http.Request, id ComponentID)
+	// UpdateComponent Update a user component and re-render the screens that use it
+	// (PUT /components/{id})
+	UpdateComponent(w http.ResponseWriter, r *http.Request, id ComponentID)
+	// DuplicateComponent Copy a component (e.g. a built-in) into an editable user component
+	// (POST /components/{id}/duplicate)
+	DuplicateComponent(w http.ResponseWriter, r *http.Request, id ComponentID)
 
 	// (GET /connector-types)
 	ListConnectorTypes(w http.ResponseWriter, r *http.Request)
@@ -1043,6 +1209,18 @@ type ServerInterface interface {
 	// RenderScreen Render and store now
 	// (POST /screens/{id}/renders)
 	RenderScreen(w http.ResponseWriter, r *http.Request, id ScreenID)
+
+	// (GET /snippets)
+	ListSnippets(w http.ResponseWriter, r *http.Request)
+
+	// (POST /snippets)
+	CreateSnippet(w http.ResponseWriter, r *http.Request)
+
+	// (DELETE /snippets/{id})
+	DeleteSnippet(w http.ResponseWriter, r *http.Request, id SnippetID)
+
+	// (PUT /snippets/{id})
+	UpdateSnippet(w http.ResponseWriter, r *http.Request, id SnippetID)
 	// GetSystem Server information the dashboard needs
 	// (GET /system)
 	GetSystem(w http.ResponseWriter, r *http.Request)
@@ -1128,6 +1306,152 @@ func (siw *ServerInterfaceWrapper) PreviewAsset(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.PreviewAsset(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListComponents operation middleware
+func (siw *ServerInterfaceWrapper) ListComponents(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListComponents(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateComponent operation middleware
+func (siw *ServerInterfaceWrapper) CreateComponent(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateComponent(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PreviewComponent operation middleware
+func (siw *ServerInterfaceWrapper) PreviewComponent(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PreviewComponent(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteComponent operation middleware
+func (siw *ServerInterfaceWrapper) DeleteComponent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ComponentID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteComponent(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetComponent operation middleware
+func (siw *ServerInterfaceWrapper) GetComponent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ComponentID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetComponent(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateComponent operation middleware
+func (siw *ServerInterfaceWrapper) UpdateComponent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ComponentID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateComponent(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DuplicateComponent operation middleware
+func (siw *ServerInterfaceWrapper) DuplicateComponent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ComponentID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DuplicateComponent(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2092,6 +2416,86 @@ func (siw *ServerInterfaceWrapper) RenderScreen(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// ListSnippets operation middleware
+func (siw *ServerInterfaceWrapper) ListSnippets(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSnippets(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateSnippet operation middleware
+func (siw *ServerInterfaceWrapper) CreateSnippet(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateSnippet(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteSnippet operation middleware
+func (siw *ServerInterfaceWrapper) DeleteSnippet(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id SnippetID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteSnippet(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateSnippet operation middleware
+func (siw *ServerInterfaceWrapper) UpdateSnippet(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id SnippetID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateSnippet(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetSystem operation middleware
 func (siw *ServerInterfaceWrapper) GetSystem(w http.ResponseWriter, r *http.Request) {
 
@@ -2259,6 +2663,17 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/assets", wrapper.UploadAsset)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/assets/{id}", wrapper.DeleteAsset)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/assets/{id}/preview", wrapper.PreviewAsset)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/components", wrapper.ListComponents)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/components", wrapper.CreateComponent)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/components/preview", wrapper.PreviewComponent)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/components/{id}", wrapper.DeleteComponent)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/components/{id}", wrapper.GetComponent)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/components/{id}", wrapper.UpdateComponent)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/components/{id}/duplicate", wrapper.DuplicateComponent)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/snippets", wrapper.ListSnippets)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/snippets", wrapper.CreateSnippet)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/snippets/{id}", wrapper.DeleteSnippet)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/snippets/{id}", wrapper.UpdateSnippet)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/connector-types", wrapper.ListConnectorTypes)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/connectors", wrapper.ListConnectors)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/connectors", wrapper.CreateConnector)
@@ -2272,6 +2687,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	return m
 }
 
+type ComponentJSONResponse Component
+
 type ConnectorJSONResponse Connector
 
 type DeviceJSONResponse Device
@@ -2281,6 +2698,10 @@ type PlaylistJSONResponse Playlist
 type ProblemApplicationProblemPlusJSONResponse Problem
 
 type ScreenJSONResponse Screen
+
+type SnippetJSONResponse Snippet
+
+type TemplateProblemApplicationProblemPlusJSONResponse TemplateProblem
 
 type ListAssetsRequestObject struct {
 }
@@ -2418,6 +2839,324 @@ type PreviewAsset404ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response PreviewAsset404ApplicationProblemPlusJSONResponse) VisitPreviewAssetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListComponentsRequestObject struct {
+}
+
+type ListComponentsResponseObject interface {
+	VisitListComponentsResponse(w http.ResponseWriter) error
+}
+
+type ListComponents200JSONResponse []Component
+
+func (response ListComponents200JSONResponse) VisitListComponentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateComponentRequestObject struct {
+	Body *CreateComponentJSONRequestBody
+}
+
+type CreateComponentResponseObject interface {
+	VisitCreateComponentResponse(w http.ResponseWriter) error
+}
+
+type CreateComponent201JSONResponse struct{ ComponentJSONResponse }
+
+func (response CreateComponent201JSONResponse) VisitCreateComponentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateComponent422ApplicationProblemPlusJSONResponse struct {
+	TemplateProblemApplicationProblemPlusJSONResponse
+}
+
+func (response CreateComponent422ApplicationProblemPlusJSONResponse) VisitCreateComponentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewComponentRequestObject struct {
+	Body *PreviewComponentJSONRequestBody
+}
+
+type PreviewComponentResponseObject interface {
+	VisitPreviewComponentResponse(w http.ResponseWriter) error
+}
+
+type PreviewComponent200JSONResponse Preview
+
+func (response PreviewComponent200JSONResponse) VisitPreviewComponentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewComponent404ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response PreviewComponent404ApplicationProblemPlusJSONResponse) VisitPreviewComponentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewComponent422ApplicationProblemPlusJSONResponse struct {
+	TemplateProblemApplicationProblemPlusJSONResponse
+}
+
+func (response PreviewComponent422ApplicationProblemPlusJSONResponse) VisitPreviewComponentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewComponent503ApplicationProblemPlusJSONResponse Problem
+
+func (response PreviewComponent503ApplicationProblemPlusJSONResponse) VisitPreviewComponentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteComponentRequestObject struct {
+	Id ComponentID `json:"id"`
+}
+
+type DeleteComponentResponseObject interface {
+	VisitDeleteComponentResponse(w http.ResponseWriter) error
+}
+
+type DeleteComponent204Response struct {
+}
+
+func (response DeleteComponent204Response) VisitDeleteComponentResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteComponent404ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteComponent404ApplicationProblemPlusJSONResponse) VisitDeleteComponentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteComponent409ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteComponent409ApplicationProblemPlusJSONResponse) VisitDeleteComponentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetComponentRequestObject struct {
+	Id ComponentID `json:"id"`
+}
+
+type GetComponentResponseObject interface {
+	VisitGetComponentResponse(w http.ResponseWriter) error
+}
+
+type GetComponent200JSONResponse struct{ ComponentJSONResponse }
+
+func (response GetComponent200JSONResponse) VisitGetComponentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetComponent404ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetComponent404ApplicationProblemPlusJSONResponse) VisitGetComponentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateComponentRequestObject struct {
+	Id   ComponentID `json:"id"`
+	Body *UpdateComponentJSONRequestBody
+}
+
+type UpdateComponentResponseObject interface {
+	VisitUpdateComponentResponse(w http.ResponseWriter) error
+}
+
+type UpdateComponent200JSONResponse struct{ ComponentJSONResponse }
+
+func (response UpdateComponent200JSONResponse) VisitUpdateComponentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateComponent404ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateComponent404ApplicationProblemPlusJSONResponse) VisitUpdateComponentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateComponent409ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateComponent409ApplicationProblemPlusJSONResponse) VisitUpdateComponentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateComponent422ApplicationProblemPlusJSONResponse struct {
+	TemplateProblemApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateComponent422ApplicationProblemPlusJSONResponse) VisitUpdateComponentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DuplicateComponentRequestObject struct {
+	Id ComponentID `json:"id"`
+}
+
+type DuplicateComponentResponseObject interface {
+	VisitDuplicateComponentResponse(w http.ResponseWriter) error
+}
+
+type DuplicateComponent201JSONResponse struct{ ComponentJSONResponse }
+
+func (response DuplicateComponent201JSONResponse) VisitDuplicateComponentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DuplicateComponent404ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response DuplicateComponent404ApplicationProblemPlusJSONResponse) VisitDuplicateComponentResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -3887,6 +4626,178 @@ func (response RenderScreen404ApplicationProblemPlusJSONResponse) VisitRenderScr
 	return err
 }
 
+type ListSnippetsRequestObject struct {
+}
+
+type ListSnippetsResponseObject interface {
+	VisitListSnippetsResponse(w http.ResponseWriter) error
+}
+
+type ListSnippets200JSONResponse []Snippet
+
+func (response ListSnippets200JSONResponse) VisitListSnippetsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSnippetRequestObject struct {
+	Body *CreateSnippetJSONRequestBody
+}
+
+type CreateSnippetResponseObject interface {
+	VisitCreateSnippetResponse(w http.ResponseWriter) error
+}
+
+type CreateSnippet201JSONResponse struct{ SnippetJSONResponse }
+
+func (response CreateSnippet201JSONResponse) VisitCreateSnippetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSnippet422ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response CreateSnippet422ApplicationProblemPlusJSONResponse) VisitCreateSnippetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteSnippetRequestObject struct {
+	Id SnippetID `json:"id"`
+}
+
+type DeleteSnippetResponseObject interface {
+	VisitDeleteSnippetResponse(w http.ResponseWriter) error
+}
+
+type DeleteSnippet204Response struct {
+}
+
+func (response DeleteSnippet204Response) VisitDeleteSnippetResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteSnippet404ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteSnippet404ApplicationProblemPlusJSONResponse) VisitDeleteSnippetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteSnippet409ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteSnippet409ApplicationProblemPlusJSONResponse) VisitDeleteSnippetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateSnippetRequestObject struct {
+	Id   SnippetID `json:"id"`
+	Body *UpdateSnippetJSONRequestBody
+}
+
+type UpdateSnippetResponseObject interface {
+	VisitUpdateSnippetResponse(w http.ResponseWriter) error
+}
+
+type UpdateSnippet200JSONResponse struct{ SnippetJSONResponse }
+
+func (response UpdateSnippet200JSONResponse) VisitUpdateSnippetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateSnippet404ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateSnippet404ApplicationProblemPlusJSONResponse) VisitUpdateSnippetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateSnippet409ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateSnippet409ApplicationProblemPlusJSONResponse) VisitUpdateSnippetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateSnippet422ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateSnippet422ApplicationProblemPlusJSONResponse) VisitUpdateSnippetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetSystemRequestObject struct {
 }
 
@@ -3922,6 +4833,27 @@ type StrictServerInterface interface {
 	// PreviewAsset Show an image as a device model would display it
 	// (POST /assets/{id}/preview)
 	PreviewAsset(ctx context.Context, request PreviewAssetRequestObject) (PreviewAssetResponseObject, error)
+
+	// (GET /components)
+	ListComponents(ctx context.Context, request ListComponentsRequestObject) (ListComponentsResponseObject, error)
+
+	// (POST /components)
+	CreateComponent(ctx context.Context, request CreateComponentRequestObject) (CreateComponentResponseObject, error)
+	// PreviewComponent Render a (possibly unsaved) component on its own with sample data
+	// (POST /components/preview)
+	PreviewComponent(ctx context.Context, request PreviewComponentRequestObject) (PreviewComponentResponseObject, error)
+
+	// (DELETE /components/{id})
+	DeleteComponent(ctx context.Context, request DeleteComponentRequestObject) (DeleteComponentResponseObject, error)
+
+	// (GET /components/{id})
+	GetComponent(ctx context.Context, request GetComponentRequestObject) (GetComponentResponseObject, error)
+	// UpdateComponent Update a user component and re-render the screens that use it
+	// (PUT /components/{id})
+	UpdateComponent(ctx context.Context, request UpdateComponentRequestObject) (UpdateComponentResponseObject, error)
+	// DuplicateComponent Copy a component (e.g. a built-in) into an editable user component
+	// (POST /components/{id}/duplicate)
+	DuplicateComponent(ctx context.Context, request DuplicateComponentRequestObject) (DuplicateComponentResponseObject, error)
 
 	// (GET /connector-types)
 	ListConnectorTypes(ctx context.Context, request ListConnectorTypesRequestObject) (ListConnectorTypesResponseObject, error)
@@ -4033,6 +4965,18 @@ type StrictServerInterface interface {
 	// RenderScreen Render and store now
 	// (POST /screens/{id}/renders)
 	RenderScreen(ctx context.Context, request RenderScreenRequestObject) (RenderScreenResponseObject, error)
+
+	// (GET /snippets)
+	ListSnippets(ctx context.Context, request ListSnippetsRequestObject) (ListSnippetsResponseObject, error)
+
+	// (POST /snippets)
+	CreateSnippet(ctx context.Context, request CreateSnippetRequestObject) (CreateSnippetResponseObject, error)
+
+	// (DELETE /snippets/{id})
+	DeleteSnippet(ctx context.Context, request DeleteSnippetRequestObject) (DeleteSnippetResponseObject, error)
+
+	// (PUT /snippets/{id})
+	UpdateSnippet(ctx context.Context, request UpdateSnippetRequestObject) (UpdateSnippetResponseObject, error)
 	// GetSystem Server information the dashboard needs
 	// (GET /system)
 	GetSystem(ctx context.Context, request GetSystemRequestObject) (GetSystemResponseObject, error)
@@ -4184,6 +5128,203 @@ func (sh *strictHandler) PreviewAsset(w http.ResponseWriter, r *http.Request, id
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(PreviewAssetResponseObject); ok {
 		if err := validResponse.VisitPreviewAssetResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListComponents operation middleware
+func (sh *strictHandler) ListComponents(w http.ResponseWriter, r *http.Request) {
+	var request ListComponentsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListComponents(ctx, request.(ListComponentsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListComponents")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListComponentsResponseObject); ok {
+		if err := validResponse.VisitListComponentsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateComponent operation middleware
+func (sh *strictHandler) CreateComponent(w http.ResponseWriter, r *http.Request) {
+	var request CreateComponentRequestObject
+
+	var body CreateComponentJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateComponent(ctx, request.(CreateComponentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateComponent")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateComponentResponseObject); ok {
+		if err := validResponse.VisitCreateComponentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PreviewComponent operation middleware
+func (sh *strictHandler) PreviewComponent(w http.ResponseWriter, r *http.Request) {
+	var request PreviewComponentRequestObject
+
+	var body PreviewComponentJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PreviewComponent(ctx, request.(PreviewComponentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PreviewComponent")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PreviewComponentResponseObject); ok {
+		if err := validResponse.VisitPreviewComponentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteComponent operation middleware
+func (sh *strictHandler) DeleteComponent(w http.ResponseWriter, r *http.Request, id ComponentID) {
+	var request DeleteComponentRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteComponent(ctx, request.(DeleteComponentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteComponent")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteComponentResponseObject); ok {
+		if err := validResponse.VisitDeleteComponentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetComponent operation middleware
+func (sh *strictHandler) GetComponent(w http.ResponseWriter, r *http.Request, id ComponentID) {
+	var request GetComponentRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetComponent(ctx, request.(GetComponentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetComponent")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetComponentResponseObject); ok {
+		if err := validResponse.VisitGetComponentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateComponent operation middleware
+func (sh *strictHandler) UpdateComponent(w http.ResponseWriter, r *http.Request, id ComponentID) {
+	var request UpdateComponentRequestObject
+
+	request.Id = id
+
+	var body UpdateComponentJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateComponent(ctx, request.(UpdateComponentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateComponent")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateComponentResponseObject); ok {
+		if err := validResponse.VisitUpdateComponentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DuplicateComponent operation middleware
+func (sh *strictHandler) DuplicateComponent(w http.ResponseWriter, r *http.Request, id ComponentID) {
+	var request DuplicateComponentRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DuplicateComponent(ctx, request.(DuplicateComponentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DuplicateComponent")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DuplicateComponentResponseObject); ok {
+		if err := validResponse.VisitDuplicateComponentResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -5230,6 +6371,120 @@ func (sh *strictHandler) RenderScreen(w http.ResponseWriter, r *http.Request, id
 	}
 }
 
+// ListSnippets operation middleware
+func (sh *strictHandler) ListSnippets(w http.ResponseWriter, r *http.Request) {
+	var request ListSnippetsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListSnippets(ctx, request.(ListSnippetsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListSnippets")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListSnippetsResponseObject); ok {
+		if err := validResponse.VisitListSnippetsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateSnippet operation middleware
+func (sh *strictHandler) CreateSnippet(w http.ResponseWriter, r *http.Request) {
+	var request CreateSnippetRequestObject
+
+	var body CreateSnippetJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateSnippet(ctx, request.(CreateSnippetRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateSnippet")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateSnippetResponseObject); ok {
+		if err := validResponse.VisitCreateSnippetResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteSnippet operation middleware
+func (sh *strictHandler) DeleteSnippet(w http.ResponseWriter, r *http.Request, id SnippetID) {
+	var request DeleteSnippetRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteSnippet(ctx, request.(DeleteSnippetRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteSnippet")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteSnippetResponseObject); ok {
+		if err := validResponse.VisitDeleteSnippetResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateSnippet operation middleware
+func (sh *strictHandler) UpdateSnippet(w http.ResponseWriter, r *http.Request, id SnippetID) {
+	var request UpdateSnippetRequestObject
+
+	request.Id = id
+
+	var body UpdateSnippetJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateSnippet(ctx, request.(UpdateSnippetRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateSnippet")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateSnippetResponseObject); ok {
+		if err := validResponse.VisitUpdateSnippetResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetSystem operation middleware
 func (sh *strictHandler) GetSystem(w http.ResponseWriter, r *http.Request) {
 	var request GetSystemRequestObject
@@ -5259,104 +6514,120 @@ func (sh *strictHandler) GetSystem(w http.ResponseWriter, r *http.Request) {
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
+	"mEKC9X14xAUDvPSX00+kg/J/AwA=",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

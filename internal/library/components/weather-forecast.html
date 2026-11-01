@@ -1,0 +1,18 @@
+{{- with .weather }}
+<div class="layout layout--col layout--center">
+<div class="columns w--full">
+  {{- range take $.days .daily }}
+  <div class="column text--center">
+    <span class="title title--small">{{ printf "%.3s" .weekday }}</span>
+    <span class="value value--tnums">{{ num 0 .max }}° / {{ num 0 .min }}°</span>
+    <span class="description">{{ .condition }}</span>
+    {{- if $.rain }}
+    <span class="label label--small">Rain {{ num 0 .precipitation_probability }}%</span>
+    {{- end }}
+  </div>
+  {{- end }}
+</div>
+</div>
+{{- else }}
+<span class="label">No forecast data</span>
+{{- end }}

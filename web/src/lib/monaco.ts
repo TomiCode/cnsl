@@ -28,30 +28,27 @@ const contextFields: { label: string; detail: string }[] = [
   { label: '.Device.Name', detail: 'string — only when one device shows the screen' },
 ]
 
-// Built-in snippets until the snippet library lands (phase 5).
-const snippets: { label: string; detail: string; body: string }[] = [
-  {
-    label: 'view',
-    detail: 'Full-screen view with layout and title bar',
-    body: [
-      '<div class="view view--full">',
-      '  <div class="layout layout--col layout--center gap--large">',
-      '    $0',
-      '  </div>',
-      '  <div class="title_bar">',
-      '    <span class="title">${1:{{ .Screen.Name }}}</span>',
-      '  </div>',
-      '</div>',
-    ].join('\n'),
-  },
-  { label: 'title_bar', detail: 'Framework title bar', body: '<div class="title_bar">\n  <span class="title">$1</span>\n  <span class="instance">$2</span>\n</div>' },
-  { label: 'item', detail: 'Framework item (meta + content)', body: '<div class="item">\n  <div class="meta"></div>\n  <div class="content">\n    <span class="title title--small">$1</span>\n    <span class="description">$2</span>\n  </div>\n</div>' },
-  { label: 'value', detail: 'Big value with label', body: '<span class="value value--xlarge value--tnums">$1</span>\n<span class="label">$2</span>' },
-  { label: 'columns', detail: 'Two columns', body: '<div class="columns">\n  <div class="column">$1</div>\n  <div class="column">$2</div>\n</div>' },
-  { label: 'range', detail: 'Go template range', body: '{{ range ${1:.Data.items} }}\n  $0\n{{ end }}' },
-  { label: 'if', detail: 'Go template if', body: '{{ if ${1:condition} }}\n  $0\n{{ end }}' },
-  { label: 'date', detail: 'Format the current time', body: '{{ date "${1:Monday, 2 January}" .Now }}' },
-]
+// Snippets and components come from the library (stores/library.ts keeps them current).
+interface SnippetDef {
+  prefix: string
+  name: string
+  description: string
+  body: string
+}
+interface ComponentDef {
+  key: string
+  name: string
+  description: string
+  inputs: { name: string; kind: string; label?: string; help?: string }[]
+}
+let snippets: SnippetDef[] = []
+let components: ComponentDef[] = []
+export function setSnippets(list: SnippetDef[]) {
+  snippets = list
+}
+export function setComponents(list: ComponentDef[]) {
+  components = list
+}
 
 let registered = false
 
@@ -154,7 +151,7 @@ export function setupMonaco(functions: string[]) {
   })
 
   monaco.languages.registerCompletionItemProvider(LANGUAGE, {
-    triggerCharacters: ['.', '{', ' '],
+    triggerCharacters: ['.', '{', ' ', '"'],
     provideCompletionItems(model, position) {
       const before = model.getValueInRange({
         startLineNumber: 1,
@@ -174,6 +171,23 @@ export function setupMonaco(functions: string[]) {
         endColumn: word.endColumn,
       }
       const K = monaco.languages.CompletionItemKind
+      // {{ component "wea|  → component keys.
+      const keyPrefix = /component\s+"([\w-]*)$/.exec(line)?.[1]
+      if (inAction && keyPrefix !== undefined) {
+        const keyRange = { ...range, startColumn: position.column - keyPrefix.length }
+        return {
+          suggestions: components.map((c) => ({
+            label: c.key,
+            kind: K.Module,
+            detail: c.name,
+            documentation: {
+              value: [c.description, ...c.inputs.map((i, n) => `- \`${i.name}\` (${i.kind})${n === 0 ? ' — positional' : ''}${i.help ? `: ${i.help}` : ''}`)].join('\n'),
+            },
+            insertText: c.key,
+            range: keyRange,
+          })),
+        }
+      }
       if (inAction) {
         return {
           suggestions: [
@@ -186,9 +200,10 @@ export function setupMonaco(functions: string[]) {
       }
       return {
         suggestions: snippets.map((s) => ({
-          label: s.label,
+          label: s.prefix,
           kind: K.Snippet,
-          detail: s.detail,
+          detail: s.name,
+          documentation: s.description,
           insertText: s.body,
           insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
           range: { ...range, startColumn: word.startColumn },

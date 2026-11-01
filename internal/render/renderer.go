@@ -16,6 +16,7 @@ import (
 
 	"github.com/TomiCode/cnsl/internal/connector"
 	"github.com/TomiCode/cnsl/internal/imaging"
+	"github.com/TomiCode/cnsl/internal/library"
 	"github.com/TomiCode/cnsl/internal/store"
 	"github.com/TomiCode/cnsl/internal/tmpl"
 )
@@ -158,7 +159,11 @@ func (r *Renderer) Render(ctx context.Context, req Request) (Result, error) {
 		return data, stale
 	}
 
-	html, errs := compose(page{screen: sc, model: model, background: bgURL, data: dataFor}, regions, tmpl.Context{
+	lib, err := library.Load(ctx, r.store)
+	if err != nil {
+		return Result{}, fmt.Errorf("load components: %w", err)
+	}
+	html, errs := compose(page{screen: sc, model: model, background: bgURL, data: dataFor, lib: lib}, regions, tmpl.Context{
 		Now:    time.Now().In(r.tz),
 		Screen: tmpl.ScreenInfo{Name: sc.Name, Width: model.Width, Height: model.Height, BitDepth: model.BitDepth},
 		Data:   map[string]any{},

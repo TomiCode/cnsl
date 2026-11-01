@@ -6,6 +6,7 @@ const props = defineProps<{
   modelValue: string
   functions: string[]
   errors?: TemplateError[]
+  readOnly?: boolean
 }>()
 const emit = defineEmits<{
   'update:modelValue': [value: string]
@@ -30,6 +31,7 @@ onMounted(() => {
     scrollBeyondLastLine: false,
     renderWhitespace: 'boundary',
     fixedOverflowWidgets: true,
+    readOnly: props.readOnly,
   })
   ed.onDidChangeModelContent(() => emit('update:modelValue', ed.getValue()))
   ed.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => emit('save'))
@@ -55,6 +57,11 @@ watch(
   { deep: true },
 )
 
+watch(
+  () => props.readOnly,
+  (readOnly) => editor.value?.updateOptions({ readOnly }),
+)
+
 onBeforeUnmount(() => editor.value?.dispose())
 
 defineExpose({
@@ -62,6 +69,14 @@ defineExpose({
     editor.value?.revealLineInCenter(line)
     editor.value?.setPosition({ lineNumber: line, column: 1 })
     editor.value?.focus()
+  },
+  // insert puts text at the cursor (replacing a selection) as one undo step.
+  insert(text: string) {
+    const ed = editor.value
+    const sel = ed?.getSelection()
+    if (!ed || !sel) return
+    ed.executeEdits('cnsl', [{ range: sel, text, forceMoveMarkers: true }])
+    ed.focus()
   },
 })
 </script>

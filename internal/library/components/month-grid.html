@@ -1,0 +1,20 @@
+{{- $today := date "2" .Now }}
+<div class="layout layout--col gap--small">
+  {{- if .title }}
+  <span class="title">{{ date "January 2006" .Now }}</span>
+  {{- end }}
+  <table class="table table--small">
+    <thead>
+      <tr>{{ range list "Mo" "Tu" "We" "Th" "Fr" "Sa" "Su" }}<th class="text--center"><span class="title title--small">{{ . }}</span></th>{{ end }}</tr>
+    </thead>
+    <tbody>
+    {{- range calendar .Now }}
+      <tr>
+      {{- range . }}
+        <td class="text--center">{{ if eq . 0 }}{{ else if eq (printf "%d" .) $today }}<span class="label label--inverted">{{ . }}</span>{{ else }}<span class="label">{{ . }}</span>{{ end }}</td>
+      {{- end }}
+      </tr>
+    {{- end }}
+    </tbody>
+  </table>
+</div>

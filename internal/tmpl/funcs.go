@@ -19,18 +19,19 @@ var funcs = template.FuncMap{
 	"until": func(t time.Time) string {
 		return "in " + humanDuration(time.Until(t))
 	},
+	"calendar": calendar,
 
 	// Numbers
 	"add": func(a, b any) float64 { return toFloat(a) + toFloat(b) },
 	"sub": func(a, b any) float64 { return toFloat(a) - toFloat(b) },
 	"mul": func(a, b any) float64 { return toFloat(a) * toFloat(b) },
 	"div": divide,
-	"round": func(places int, v any) float64 {
-		p := math.Pow(10, float64(places))
+	"round": func(places, v any) float64 {
+		p := math.Pow(10, float64(toInt(places)))
 		return math.Round(toFloat(v)*p) / p
 	},
-	"num": func(places int, v any) string {
-		return fmt.Sprintf("%.*f", places, toFloat(v))
+	"num": func(places, v any) string {
+		return fmt.Sprintf("%.*f", max(toInt(places), 0), toFloat(v))
 	},
 
 	// Values
@@ -46,21 +47,23 @@ var funcs = template.FuncMap{
 	"join":  func(sep string, items []string) string { return strings.Join(items, sep) },
 	"list":  func(items ...any) []any { return items },
 	"dict":  dict,
-	"take": func(n int, items any) any {
+	"take": func(n any, items any) any {
 		v := reflect.ValueOf(items)
 		if v.Kind() != reflect.Slice && v.Kind() != reflect.Array {
 			return items
 		}
-		return v.Slice(0, min(n, v.Len())).Interface()
+		return v.Slice(0, max(min(toInt(n), v.Len()), 0)).Interface()
 	},
-	"seq": func(n int) []int {
-		out := make([]int, max(n, 0))
+	"seq": func(n any) []int {
+		out := make([]int, max(toInt(n), 0))
 		for i := range out {
 			out[i] = i
 		}
 		return out
 	},
 	"safeHTML": func(s string) template.HTML { return template.HTML(s) },
+	// Replaced per render (see componentCaller); listed here so templates parse and editors complete it.
+	"component": func(string, ...any) (template.HTML, error) { return "", nil },
 }
 
 // FuncNames lists the helpers for editor completion.
@@ -93,6 +96,31 @@ func dict(pairs ...any) (map[string]any, error) {
 		m[k] = pairs[i+1]
 	}
 	return m, nil
+}
+
+// toInt accepts numbers of any type, so inputs from JSON (float64) work where counts are expected.
+func toInt(v any) int { return int(math.Round(toFloat(v))) }
+
+// calendar returns the weeks of t's month, Monday first; days outside the month are 0.
+func calendar(t time.Time) [][]int {
+	first := time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, t.Location())
+	days := first.AddDate(0, 1, -1).Day()
+	offset := (int(first.Weekday()) + 6) % 7
+	var weeks [][]int
+	week := make([]int, 7)
+	for i := 0; i < offset+days; i++ {
+		if i >= offset {
+			week[i%7] = i - offset + 1
+		}
+		if i%7 == 6 {
+			weeks = append(weeks, week)
+			week = make([]int, 7)
+		}
+	}
+	if (offset+days)%7 != 0 {
+		weeks = append(weeks, week)
+	}
+	return weeks
 }
 
 func toFloat(v any) float64 {

@@ -427,6 +427,111 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/components": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listComponents"];
+        put?: never;
+        post: operations["createComponent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/components/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Render a (possibly unsaved) component on its own with sample data */
+        post: operations["previewComponent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/components/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ComponentID"];
+            };
+            cookie?: never;
+        };
+        get: operations["getComponent"];
+        /** Update a user component and re-render the screens that use it */
+        put: operations["updateComponent"];
+        post?: never;
+        delete: operations["deleteComponent"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/components/{id}/duplicate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ComponentID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Copy a component (e.g. a built-in) into an editable user component */
+        post: operations["duplicateComponent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/snippets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listSnippets"];
+        put?: never;
+        post: operations["createSnippet"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/snippets/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["SnippetID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["updateSnippet"];
+        post?: never;
+        delete: operations["deleteSnippet"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/connector-types": {
         parameters: {
             query?: never;
@@ -890,6 +995,72 @@ export interface components {
             /** Format: date-time */
             created_at: string;
         };
+        ComponentParam: {
+            /** @description Field name inside the component (.name). */
+            name: string;
+            label?: string;
+            /** @enum {string} */
+            kind: "data" | "string" | "number" | "bool";
+            /** @description Connector type a data input expects (insert flow, preview samples). */
+            connector?: string;
+            default?: unknown;
+            help?: string;
+            /** @description Example value for previews; data inputs fall back to the connector's sample. */
+            sample?: unknown;
+        };
+        Component: {
+            /** Format: int64 */
+            id: number;
+            key: string;
+            name: string;
+            description: string;
+            source: string;
+            inputs: components["schemas"]["ComponentParam"][];
+            builtin: boolean;
+            /** @description Ids of screens whose templates call this component. */
+            used_by: number[];
+            /** Format: date-time */
+            updated_at: string;
+        };
+        ComponentInput: {
+            key: string;
+            name: string;
+            description?: string;
+            source: string;
+            inputs: components["schemas"]["ComponentParam"][];
+        };
+        ComponentPreviewRequest: {
+            /** Format: int64 */
+            model_id: number;
+            component: components["schemas"]["ComponentInput"];
+            /**
+             * @default full
+             * @enum {string}
+             */
+            view: "full" | "half_vertical" | "half_horizontal" | "quadrant";
+            /** @description Input values by name; other inputs use their sample or default. */
+            values?: {
+                [key: string]: unknown;
+            };
+        };
+        Snippet: {
+            /** Format: int64 */
+            id: number;
+            prefix: string;
+            name: string;
+            description: string;
+            /** @description Monaco snippet syntax ($1, ${1:default}, $0). */
+            body: string;
+            builtin: boolean;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        SnippetInput: {
+            prefix: string;
+            name: string;
+            description?: string;
+            body: string;
+        };
         ConnectorField: {
             key: string;
             label: string;
@@ -1012,6 +1183,33 @@ export interface components {
                 "application/json": components["schemas"]["Connector"];
             };
         };
+        /** @description The component */
+        Component: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Component"];
+            };
+        };
+        /** @description The snippet */
+        Snippet: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Snippet"];
+            };
+        };
+        /** @description Invalid input or template syntax errors */
+        TemplateProblem: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["TemplateProblem"];
+            };
+        };
         /** @description Error */
         Problem: {
             headers: {
@@ -1028,6 +1226,8 @@ export interface components {
         PlaylistID: number;
         ModelID: number;
         ConnectorID: number;
+        ComponentID: number;
+        SnippetID: number;
         AssetID: number;
         Limit: number;
     };
@@ -1783,6 +1983,255 @@ export interface operations {
                 };
             };
             404: components["responses"]["Problem"];
+        };
+    };
+    listComponents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Built-in and user components */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Component"][];
+                };
+            };
+        };
+    };
+    createComponent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ComponentInput"];
+            };
+        };
+        responses: {
+            201: components["responses"]["Component"];
+            422: components["responses"]["TemplateProblem"];
+        };
+    };
+    previewComponent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ComponentPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Rendered preview */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Preview"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            422: components["responses"]["TemplateProblem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    getComponent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ComponentID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["Component"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateComponent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ComponentID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ComponentInput"];
+            };
+        };
+        responses: {
+            200: components["responses"]["Component"];
+            404: components["responses"]["Problem"];
+            /** @description Built-in components are read-only; a used component cannot change its key */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            422: components["responses"]["TemplateProblem"];
+        };
+    };
+    deleteComponent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ComponentID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Problem"];
+            /** @description Built-in, or still used by a screen */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    duplicateComponent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ComponentID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: components["responses"]["Component"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listSnippets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Built-in and user editor snippets */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Snippet"][];
+                };
+            };
+        };
+    };
+    createSnippet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SnippetInput"];
+            };
+        };
+        responses: {
+            201: components["responses"]["Snippet"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    updateSnippet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["SnippetID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SnippetInput"];
+            };
+        };
+        responses: {
+            200: components["responses"]["Snippet"];
+            404: components["responses"]["Problem"];
+            /** @description Built-in snippets are read-only */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            422: components["responses"]["Problem"];
+        };
+    };
+    deleteSnippet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["SnippetID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Problem"];
+            /** @description Built-in snippets are read-only */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     listConnectorTypes: {

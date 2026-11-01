@@ -1,0 +1,16 @@
+{{- with .status }}
+<div class="layout layout--col layout--top layout--left gap--small">
+  <span class="title title--small">{{ .up }} of {{ .total }} up</span>
+  {{- range .checks }}
+  <div class="item">
+    <div class="meta"></div>
+    <div class="content">
+      <span class="title title--small">{{ .name }}</span>
+      <span class="description">{{ if .up }}up{{ if $.latency }} · {{ .latency_ms }} ms{{ end }}{{ else }}DOWN · {{ .error }}{{ end }}</span>
+    </div>
+  </div>
+  {{- end }}
+</div>
+{{- else }}
+<span class="label">No status data</span>
+{{- end }}

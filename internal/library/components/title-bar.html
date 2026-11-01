@@ -1,0 +1,6 @@
+<div class="title_bar">
+  <span class="title">{{ default .Screen.Name .title }}</span>
+  {{- with .instance }}
+  <span class="instance">{{ . }}</span>
+  {{- end }}
+</div>

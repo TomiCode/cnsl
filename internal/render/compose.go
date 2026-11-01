@@ -58,6 +58,7 @@ type page struct {
 	background string // URL of the prepared background image, or ""
 	// data returns the connector data visible to a region (screen-wide plus its own bindings).
 	data func(regionKey string) (map[string]any, map[string]bool)
+	lib  tmpl.Library // components ({{ component … }}), may be nil
 }
 
 // compose builds the page for a screen. Region rectangles are in device pixels and are converted
@@ -87,7 +88,7 @@ func compose(p page, regions []store.Region, ctx tmpl.Context) (string, []*tmpl.
 		if p.data != nil {
 			rctx.Data, rctx.Stale = p.data(r.Key)
 		}
-		body, err := tmpl.Render(r.Key, r.Template, rctx)
+		body, err := tmpl.Render(r.Key, r.Template, rctx, p.lib)
 		if err != nil {
 			te, ok := err.(*tmpl.Error)
 			if !ok {
