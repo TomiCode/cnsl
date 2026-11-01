@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
-import { Blocks, CircleAlert, Copy, Eye, Loader2, Lock, Plus, Save, Scissors, Trash2, X } from 'lucide-vue-next'
+import { Blocks, CircleAlert, Copy, Eye, Loader2, Lock, Plus, Save, Scissors, Search, Trash2, X } from 'lucide-vue-next'
 import CodeEditor from '@/components/CodeEditor.vue'
 import { api, type Schemas } from '@/api/client'
 import { ApiError, unwrap, useDevicesStore } from '@/stores/devices'
@@ -17,7 +17,9 @@ const devices = useDevicesStore()
 const connectors = useConnectorsStore()
 const screens = useScreensStore()
 
-const tab = computed(() => (route.query.tab === 'snippets' ? 'snippets' : 'components'))
+type Tab = 'components' | 'snippets' | 'icons'
+const tab = computed<Tab>(() => (route.query.tab === 'snippets' || route.query.tab === 'icons' ? route.query.tab : 'components'))
+const languages = ref<Schemas['SystemInfo']['languages']>([])
 const functions = ref<string[]>([])
 const error = ref<string | null>(null)
 const message = ref<string | null>(null)
@@ -32,6 +34,7 @@ onMounted(async () => {
       screens.loaded ? Promise.resolve() : screens.load(),
     ])
     functions.value = unwrap(sys).template_functions
+    languages.value = unwrap(sys).languages
     modelId.value = devices.models[0]?.id ?? 0
     const first = library.components[0]
     if (first && tab.value === 'components') select(first)
@@ -188,16 +191,17 @@ const usage = computed(() => {
 // Preview
 const modelId = ref(0)
 const view = ref<'full' | 'half_vertical' | 'half_horizontal' | 'quadrant'>('full')
+const previewLang = ref('') // '' = the global setting
 const preview = ref<Schemas['Preview'] | null>(null)
 const previewing = ref(false)
-watch([modelId, view], () => void runPreview())
+watch([modelId, view, previewLang], () => void runPreview())
 
 async function runPreview() {
   if (!selected.value || !modelId.value || previewing.value) return
   previewing.value = true
   error.value = null
   try {
-    const res = await api.POST('/components/preview', { body: { model_id: modelId.value, view: view.value, component: body() } })
+    const res = await api.POST('/components/preview', { body: { model_id: modelId.value, view: view.value, component: body(), ...(previewLang.value ? { language: previewLang.value } : {}) } })
     if (res.error) {
       if (res.response.status === 422) throw new ApiError(problemText(res.error as Schemas['TemplateProblem']))
       unwrap(res)
@@ -255,7 +259,35 @@ async function removeSnippet() {
   }
 }
 
-function setTab(t: 'components' | 'snippets') {
+// ---- Icons ----
+
+const iconQuery = ref('')
+const iconSet = ref<'' | 'wi' | 'lucide'>('')
+const iconSize = ref(32)
+const copied = ref('')
+const maxIcons = 360
+const iconMatches = computed(() => {
+  const q = iconQuery.value.trim().toLowerCase()
+  return library.icons.filter(
+    (i) => (!iconSet.value || i.set === iconSet.value) && (!q || i.name.includes(q) || i.tags?.some((t) => t.includes(q))),
+  )
+})
+
+function iconCall(name: string) {
+  return `{{ icon "${name}" ${iconSize.value} }}`
+}
+
+async function copyIcon(name: string) {
+  try {
+    await navigator.clipboard.writeText(iconCall(name))
+    copied.value = name
+  } catch {
+    copied.value = ''
+    error.value = 'Copy failed — select the call below the grid instead'
+  }
+}
+
+function setTab(t: Tab) {
   if (t !== tab.value && confirmDiscard()) void router.replace({ query: t === 'components' ? {} : { tab: t } })
 }
 
@@ -275,7 +307,7 @@ const listItem = (active: boolean) =>
       <h1 class="font-semibold">Library</h1>
       <div class="flex overflow-hidden rounded-md border border-zinc-200 text-sm">
         <button
-          v-for="t in ['components', 'snippets'] as const"
+          v-for="t in ['components', 'snippets', 'icons'] as const"
           :key="t"
           type="button"
           class="px-3 py-1 capitalize"
@@ -416,6 +448,10 @@ const listItem = (active: boolean) =>
             <select v-model.number="modelId" :class="[input, 'w-auto']" aria-label="Device model">
               <option v-for="m in devices.models" :key="m.id" :value="m.id">{{ m.name }}</option>
             </select>
+            <select v-model="previewLang" :class="[input, 'w-auto']" aria-label="Preview language">
+              <option value="">Default language</option>
+              <option v-for="l in languages" :key="l.code" :value="l.code">{{ l.name }}</option>
+            </select>
             <select v-model="view" :class="[input, 'w-auto']" aria-label="View size">
               <option value="full">Full screen</option>
               <option value="half_vertical">Half (left)</option>
@@ -451,6 +487,56 @@ const listItem = (active: boolean) =>
           </div>
         </section>
       </div>
+    </div>
+
+    <!-- Icons -->
+    <div v-else-if="tab === 'icons'" class="min-h-0 flex-1 overflow-y-auto p-6">
+      <div class="mb-4 flex flex-wrap items-center gap-3">
+        <label class="relative">
+          <Search class="pointer-events-none absolute top-2 left-2.5 size-4 text-zinc-400" />
+          <input v-model="iconQuery" :class="[input, 'w-72 pl-8']" placeholder="Search names and tags (sun, battery, wifi…)" />
+        </label>
+        <div class="flex overflow-hidden rounded-md border border-zinc-200 text-sm">
+          <button
+            v-for="s in [['', 'All'], ['wi', 'Weather'], ['lucide', 'Outline']] as const"
+            :key="s[0]"
+            type="button"
+            class="px-3 py-1"
+            :class="iconSet === s[0] ? 'bg-zinc-900 text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50'"
+            @click="iconSet = s[0]"
+          >
+            {{ s[1] }}
+          </button>
+        </div>
+        <label class="flex items-center gap-1.5 text-sm text-zinc-500">
+          size
+          <input v-model.number="iconSize" type="number" min="8" max="400" :class="[input, 'w-20']" />
+        </label>
+        <span class="text-xs text-zinc-400">
+          {{ iconMatches.length }} icon{{ iconMatches.length === 1 ? '' : 's' }}{{ iconMatches.length > maxIcons ? ` — showing ${maxIcons}, refine the search` : '' }}
+        </span>
+      </div>
+      <p class="mb-4 text-xs text-zinc-500">
+        Click an icon to copy its call. Weather Icons (<code>wi-…</code>, SIL OFL 1.1) are filled shapes; outline icons are Lucide (ISC) and
+        take an optional stroke width: <code v-text="'{{ icon &quot;battery&quot; 40 3 }}'" />. Icons inherit the text color.
+      </p>
+      <div class="grid grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))] gap-2">
+        <button
+          v-for="i in iconMatches.slice(0, maxIcons)"
+          :key="i.name"
+          type="button"
+          class="flex flex-col items-center gap-1.5 rounded-md border bg-white px-1 py-3 text-center hover:border-zinc-400"
+          :class="copied === i.name ? 'border-emerald-500 ring-1 ring-emerald-500' : 'border-zinc-200'"
+          :title="i.tags?.join(', ') || i.name"
+          @click="copyIcon(i.name)"
+        >
+          <img :src="`/icons/${i.name}.svg`" :alt="i.name" class="size-8" loading="lazy" />
+          <span class="w-full truncate font-mono text-[10px] text-zinc-500">{{ i.name }}</span>
+        </button>
+      </div>
+      <p v-if="copied" class="sticky bottom-0 mt-4 rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+        Copied <code class="font-mono" v-text="iconCall(copied)" />
+      </p>
     </div>
 
     <!-- Snippets -->

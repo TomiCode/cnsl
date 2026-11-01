@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: cnsl dashboard API
-  version: 0.7.0
+  version: 0.8.0
   description: |
     API used by the cnsl web dashboard. Device (firmware) endpoints are not part of this spec;
     they are served on the separate device listener (and mirrored under /device on the
@@ -53,6 +53,44 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SystemInfo"
+
+  /settings:
+    get:
+      operationId: getSettings
+      tags: [system]
+      responses:
+        "200":
+          $ref: "#/components/responses/Settings"
+    put:
+      operationId: updateSettings
+      summary: Change global settings; screens using the defaults are re-rendered
+      tags: [system]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Settings"
+      responses:
+        "200":
+          $ref: "#/components/responses/Settings"
+        "422":
+          $ref: "#/components/responses/Problem"
+
+  /icons:
+    get:
+      operationId: listIcons
+      summary: Icons for {{ icon "name" }}; each is also served as /icons/<name>.svg
+      tags: [library]
+      responses:
+        "200":
+          description: All icons, sorted by name
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/IconInfo"
 
   /events:
     get:
@@ -1036,6 +1074,12 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/Component"
+    Settings:
+      description: Global settings
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Settings"
     Snippet:
       description: The snippet
       content:
@@ -1072,9 +1116,18 @@ components:
 
     SystemInfo:
       type: object
-      required: [version, timezone, device_public_url, template_functions, framework_version, layouts]
+      required: [version, timezone, device_public_url, template_functions, framework_version, layouts, languages]
       properties:
         version: { type: string }
+        languages:
+          type: array
+          description: Languages screens can be rendered in.
+          items:
+            type: object
+            required: [code, name]
+            properties:
+              code: { type: string, example: pl }
+              name: { type: string, example: Polski }
         framework_version: { type: string, example: 3.4.4 }
         template_functions:
           type: array
@@ -1341,9 +1394,12 @@ components:
       allOf:
         - $ref: "#/components/schemas/ScreenSummary"
         - type: object
-          required: [framework_version, head, regions, background]
+          required: [framework_version, head, regions, background, language]
           properties:
             framework_version: { type: string }
+            language:
+              type: string
+              description: Language override; empty uses the global setting.
             background:
               $ref: "#/components/schemas/Background"
             head:
@@ -1371,6 +1427,10 @@ components:
         model_id: { type: integer, format: int64 }
         head: { type: string, maxLength: 100000 }
         render_interval: { type: integer, minimum: 60, maximum: 86400 }
+        language:
+          type: string
+          maxLength: 10
+          description: Language code from /system languages; empty uses the global setting.
         layout:
           type: string
           description: A layout key from /system layouts. Changing it adds or removes regions.
@@ -1511,6 +1571,27 @@ components:
         size: { type: integer, format: int64 }
         created_at: { type: string, format: date-time }
 
+    Settings:
+      type: object
+      required: [language]
+      properties:
+        language:
+          type: string
+          description: Default language of screens (a code from /system languages).
+
+    IconInfo:
+      type: object
+      required: [name, set]
+      properties:
+        name: { type: string, example: wi-day-sunny }
+        set:
+          type: string
+          enum: [wi, lucide]
+          description: wi = Weather Icons (filled), lucide = outline icons.
+        tags:
+          type: array
+          items: { type: string }
+
     ComponentParam:
       type: object
       required: [name, kind]
@@ -1583,6 +1664,10 @@ components:
           type: object
           description: Input values by name; other inputs use their sample or default.
           additionalProperties: true
+        language:
+          type: string
+          maxLength: 10
+          description: Render in this language instead of the global setting.
 
     Snippet:
       type: object

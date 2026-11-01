@@ -12,16 +12,18 @@ type builtin struct {
 
 // Sources live in components/<key>.html.
 var builtinComponents = []builtin{
-	{"weather-current", "Current weather", "Temperature and condition from an Open-Meteo binding, with optional details.",
+	{"weather-current", "Current weather", "Temperature, weather icon and condition from an Open-Meteo binding, with optional details.",
 		[]tmpl.Input{
 			{Name: "weather", Label: "Weather data", Kind: "data", Connector: "openmeteo", Help: "An Open-Meteo binding, e.g. .Data.weather"},
 			{Name: "details", Label: "Show details", Kind: "bool", Default: true, Help: "Feels like, humidity and wind"},
+			{Name: "icon_size", Label: "Icon size", Kind: "number", Default: 96, Help: "CSS pixels; 0 hides the icon"},
 		}},
-	{"weather-forecast", "Weather forecast", "Daily highs, lows and conditions from an Open-Meteo binding.",
+	{"weather-forecast", "Weather forecast", "Daily highs, lows, icons and conditions from an Open-Meteo binding.",
 		[]tmpl.Input{
 			{Name: "weather", Label: "Weather data", Kind: "data", Connector: "openmeteo"},
 			{Name: "days", Label: "Days", Kind: "number", Default: 3, Help: "The binding fetches up to its own day count"},
 			{Name: "rain", Label: "Show rain chance", Kind: "bool", Default: false},
+			{Name: "icon_size", Label: "Icon size", Kind: "number", Default: 56, Help: "CSS pixels; 0 hides the icons"},
 		}},
 	{"sensor", "Sensor", "One Home Assistant entity as a value with a label.",
 		[]tmpl.Input{
@@ -84,6 +86,8 @@ var builtinSnippets = []store.Snippet{
 		Body: "{{ with ${1:.Data.alias} }}\n  $0\n{{ else }}\n  <span class=\"label\">No data</span>\n{{ end }}"},
 	{Prefix: "date", Name: "date", Description: "Format the current time",
 		Body: "{{ date \"${1:Monday, 2 January}\" .Now }}"},
+	{Prefix: "icon", Name: "icon", Description: "Inline icon (Weather Icons wi-…, or Lucide)",
+		Body: "{{ icon \"${1:wi-thermometer}\" ${2:32} }}"},
 	{Prefix: "component", Name: "component", Description: "Call a component",
 		Body: "{{ component \"${1:key}\" $0}}"},
 }

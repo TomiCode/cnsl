@@ -20,6 +20,7 @@ type Screen struct {
 	Layout           string `db:"layout"`           // "full", a mashup key, or "free"
 	Background       string `db:"background"`       // JSON, see render.Background
 	BackgroundIndex  int    `db:"background_index"` // slideshow position
+	Language         string `db:"language"`         // "" = the global setting
 }
 
 type Region struct {
@@ -86,9 +87,9 @@ func (s *Store) CreateScreen(ctx context.Context, sc *Screen, regions []Region) 
 	}
 	res, err := tx.NamedExecContext(ctx, `
 		INSERT INTO screens (name, model_id, framework_version, head, render_interval, created_at, updated_at,
-			kind, layout, background)
+			kind, layout, background, language)
 		VALUES (:name, :model_id, :framework_version, :head, :render_interval, :created_at, :updated_at,
-			:kind, :layout, :background)`, sc)
+			:kind, :layout, :background, :language)`, sc)
 	if err != nil {
 		return fmt.Errorf("insert screen: %w", err)
 	}
@@ -123,7 +124,7 @@ func (s *Store) UpdateScreen(ctx context.Context, sc *Screen, regions []Region) 
 	res, err := tx.NamedExecContext(ctx, `
 		UPDATE screens SET name = :name, model_id = :model_id, framework_version = :framework_version,
 			head = :head, render_interval = :render_interval, updated_at = :updated_at,
-			kind = :kind, layout = :layout, background = :background
+			kind = :kind, layout = :layout, background = :background, language = :language
 		WHERE id = :id`, sc)
 	if err != nil {
 		return fmt.Errorf("update screen: %w", err)

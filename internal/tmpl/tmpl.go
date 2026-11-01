@@ -20,6 +20,7 @@ type Context struct {
 	Region RegionInfo     //
 	Data   map[string]any // binding alias → connector data (phase 4)
 	Stale  map[string]bool
+	Lang   string // language code for names and labels (i18n), "" = default
 }
 
 type DeviceInfo struct {

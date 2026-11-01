@@ -5,7 +5,7 @@
   {{- end }}
   <table class="table table--small">
     <thead>
-      <tr>{{ range list "Mo" "Tu" "We" "Th" "Fr" "Sa" "Su" }}<th class="text--center"><span class="title title--small">{{ . }}</span></th>{{ end }}</tr>
+      <tr>{{ range weekdays }}<th class="text--center"><span class="title title--small">{{ . }}</span></th>{{ end }}</tr>
     </thead>
     <tbody>
     {{- range calendar .Now }}

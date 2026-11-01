@@ -8,17 +8,16 @@ import (
 	"reflect"
 	"strings"
 	"time"
+
+	"github.com/TomiCode/cnsl/internal/i18n"
 )
 
 // funcs is the helper set available in every template. Keep it small and documented: the
-// editor lists these names for completion.
-var funcs = template.FuncMap{
+// editor lists these names for completion. Language-dependent helpers (date, ago, until, t,
+// condition, weekdays) are replaced per render, see langFuncs; these English versions let
+// templates parse.
+var funcs = mergeFuncs(langFuncs(i18n.Get(i18n.Default), time.Local), template.FuncMap{
 	// Time
-	"date": func(layout string, t time.Time) string { return t.Format(layout) },
-	"ago":  func(t time.Time) string { return humanDuration(time.Since(t)) + " ago" },
-	"until": func(t time.Time) string {
-		return "in " + humanDuration(time.Until(t))
-	},
 	"calendar": calendar,
 
 	// Numbers
@@ -62,8 +61,19 @@ var funcs = template.FuncMap{
 		return out
 	},
 	"safeHTML": func(s string) template.HTML { return template.HTML(s) },
+	"icon":     icon,
 	// Replaced per render (see componentCaller); listed here so templates parse and editors complete it.
 	"component": func(string, ...any) (template.HTML, error) { return "", nil },
+})
+
+func mergeFuncs(maps ...template.FuncMap) template.FuncMap {
+	out := template.FuncMap{}
+	for _, m := range maps {
+		for k, v := range m {
+			out[k] = v
+		}
+	}
+	return out
 }
 
 // FuncNames lists the helpers for editor completion.
@@ -163,18 +173,4 @@ func isEmpty(v any) bool {
 		return rv.IsNil()
 	}
 	return rv.IsZero()
-}
-
-func humanDuration(d time.Duration) string {
-	d = d.Abs()
-	switch {
-	case d < time.Minute:
-		return fmt.Sprintf("%d s", int(d.Seconds()))
-	case d < time.Hour:
-		return fmt.Sprintf("%d min", int(d.Minutes()))
-	case d < 48*time.Hour:
-		return fmt.Sprintf("%d h", int(d.Hours()))
-	default:
-		return fmt.Sprintf("%d days", int(d.Hours()/24))
-	}
 }

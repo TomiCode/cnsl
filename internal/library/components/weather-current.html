@@ -1,15 +1,18 @@
 {{- with .weather }}
 <div class="layout layout--col layout--center gap--small">
-  <span class="value value--xxlarge value--tnums">{{ num 0 .current.temperature }}{{ .units.temperature }}</span>
-  <span class="title">{{ .current.condition }}</span>
+  <div class="flex flex--row flex--center-y gap--medium">
+    {{- if $.icon_size }}{{ with .current.icon }}{{ icon . $.icon_size }}{{ end }}{{ end }}
+    <span class="value value--xxlarge value--tnums">{{ num 0 .current.temperature }}{{ .units.temperature }}</span>
+  </div>
+  <span class="title">{{ condition .current.code }}</span>
   {{- if $.details }}
   <div class="flex flex--row gap--large">
-    <span class="label">Feels {{ num 0 .current.feels_like }}{{ .units.temperature }}</span>
-    <span class="label">Humidity {{ num 0 .current.humidity }}%</span>
-    <span class="label">Wind {{ num 0 .current.wind_speed }} {{ .units.wind_speed }}</span>
+    <span class="label">{{ t "feels_like" }} {{ num 0 .current.feels_like }}{{ .units.temperature }}</span>
+    <span class="label">{{ t "humidity" }} {{ num 0 .current.humidity }}%</span>
+    <span class="label">{{ t "wind" }} {{ num 0 .current.wind_speed }} {{ .units.wind_speed }}</span>
   </div>
   {{- end }}
 </div>
 {{- else }}
-<span class="label">No weather data</span>
+<span class="label">{{ t "no_data" }}</span>
 {{- end }}

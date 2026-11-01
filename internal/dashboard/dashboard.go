@@ -129,6 +129,7 @@ func (s *Server) GetSystem(_ context.Context, _ gen.GetSystemRequestObject) (gen
 		FrameworkVersion:  assets.FrameworkVersion,
 		TemplateFunctions: tmpl.FuncNames(),
 		Layouts:           toLayouts(),
+		Languages:         toLanguages(),
 	}, nil
 }
 

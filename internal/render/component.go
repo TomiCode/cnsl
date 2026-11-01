@@ -23,6 +23,7 @@ type ComponentRequest struct {
 	View string
 	// Values override input values; inputs without one use their sample, then their default.
 	Values map[string]any
+	Lang   string // "" = the global setting
 }
 
 var previewLayouts = map[string]string{"full": LayoutFull, "half_vertical": "1Lx1R", "half_horizontal": "1Tx1B", "quadrant": "2x2"}
@@ -77,7 +78,12 @@ func (r *Renderer) RenderComponent(ctx context.Context, req ComponentRequest) (R
 		}
 		return map[string]any{}, map[string]bool{}
 	}
+	lang, err := r.language(ctx, req.Lang)
+	if err != nil {
+		return Result{}, err
+	}
 	html, errs := compose(page{screen: sc, model: model, data: data, lib: lib}, regions, tmpl.Context{
+		Lang:   lang,
 		Now:    time.Now().In(r.tz),
 		Screen: tmpl.ScreenInfo{Name: sc.Name, Width: model.Width, Height: model.Height, BitDepth: model.BitDepth},
 	})

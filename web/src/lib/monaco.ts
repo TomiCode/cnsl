@@ -41,6 +41,10 @@ interface ComponentDef {
   description: string
   inputs: { name: string; kind: string; label?: string; help?: string }[]
 }
+let icons: { name: string; set: string }[] = []
+export function setIcons(list: { name: string; set: string }[]) {
+  icons = list
+}
 let snippets: SnippetDef[] = []
 let components: ComponentDef[] = []
 export function setSnippets(list: SnippetDef[]) {
@@ -185,6 +189,20 @@ export function setupMonaco(functions: string[]) {
             },
             insertText: c.key,
             range: keyRange,
+          })),
+        }
+      }
+      // {{ icon "therm|  → icon names.
+      const iconPrefix = /icon\s+"([\w:-]*)$/.exec(line)?.[1]
+      if (inAction && iconPrefix !== undefined) {
+        const iconRange = { ...range, startColumn: position.column - iconPrefix.length }
+        return {
+          suggestions: icons.map((i) => ({
+            label: i.name,
+            kind: K.Color,
+            detail: i.set === 'wi' ? 'Weather Icons' : 'Lucide',
+            insertText: i.name,
+            range: iconRange,
           })),
         }
       }

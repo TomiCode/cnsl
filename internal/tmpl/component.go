@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"html/template"
 	"regexp"
+	"time"
+
+	"github.com/TomiCode/cnsl/internal/i18n"
 )
 
 // Input declares one parameter of a component.
@@ -57,7 +60,7 @@ func ValidateInputs(inputs []Input) error {
 	return nil
 }
 
-var reserved = map[string]bool{"Now": true, "Screen": true, "Region": true, "Device": true, "Data": true, "Stale": true}
+var reserved = map[string]bool{"Now": true, "Screen": true, "Region": true, "Device": true, "Data": true, "Stale": true, "Lang": true}
 
 const maxComponentDepth = 5
 
@@ -68,10 +71,20 @@ type componentCaller struct {
 	parent Context
 	depth  int
 	parsed map[string]*template.Template
+	fm     template.FuncMap
 }
 
+// funcs are the per-render helpers: component calls plus the language-dependent ones.
 func (c *componentCaller) funcs() template.FuncMap {
-	return template.FuncMap{"component": c.call}
+	if c.fm == nil {
+		loc := c.parent.Now.Location()
+		if c.parent.Now.IsZero() {
+			loc = time.Local
+		}
+		c.fm = langFuncs(i18n.Get(c.parent.Lang), loc)
+		c.fm["component"] = c.call
+	}
+	return c.fm
 }
 
 // call runs a component. Arguments are either one value (assigned to the first input) or
@@ -95,6 +108,7 @@ func (c *componentCaller) call(key string, args ...any) (template.HTML, error) {
 	}
 	values["Now"], values["Screen"], values["Region"] = c.parent.Now, c.parent.Screen, c.parent.Region
 	values["Device"], values["Data"], values["Stale"] = c.parent.Device, c.parent.Data, c.parent.Stale
+	values["Lang"] = c.parent.Lang
 
 	t, ok := c.parsed[key]
 	if !ok {

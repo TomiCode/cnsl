@@ -2,10 +2,11 @@ package connector
 
 import (
 	"context"
-	"fmt"
 	"net/url"
 	"strconv"
 	"time"
+
+	"github.com/TomiCode/cnsl/internal/i18n"
 )
 
 // Open-Meteo: free weather forecast API, no key needed (https://open-meteo.com).
@@ -79,7 +80,8 @@ func omData(r omResponse) map[string]any {
 	daily := make([]any, 0, len(r.Daily.Time))
 	for i, day := range r.Daily.Time {
 		d := map[string]any{"date": day, "code": at(r.Daily.Code, i), "condition": wmoCondition(at(r.Daily.Code, i)),
-			"max": atF(r.Daily.Max, i), "min": atF(r.Daily.Min, i), "precipitation_probability": atF(r.Daily.PrecipProb, i),
+			"icon": wmoIcon(at(r.Daily.Code, i), true),
+			"max":  atF(r.Daily.Max, i), "min": atF(r.Daily.Min, i), "precipitation_probability": atF(r.Daily.PrecipProb, i),
 			"sunrise": atS(r.Daily.Sunrise, i), "sunset": atS(r.Daily.Sunset, i)}
 		if t, err := time.Parse("2006-01-02", day); err == nil {
 			d["weekday"] = t.Weekday().String()
@@ -90,6 +92,7 @@ func omData(r omResponse) map[string]any {
 		"current": map[string]any{
 			"time": c.Time, "temperature": c.Temperature, "feels_like": c.FeelsLike, "humidity": c.Humidity,
 			"pressure": c.Pressure, "wind_speed": c.WindSpeed, "code": c.Code, "condition": wmoCondition(c.Code),
+			"icon":   wmoIcon(c.Code, c.IsDay == 1),
 			"is_day": c.IsDay == 1,
 		},
 		"units": map[string]any{
@@ -121,32 +124,49 @@ func atS(s []string, i int) string {
 }
 
 // wmoCondition names WMO weather interpretation codes (as used by Open-Meteo).
-func wmoCondition(code int) string {
+// wmoCondition is the English name of a WMO weather code; templates translate with
+// {{ condition .code }}.
+func wmoCondition(code int) string { return i18n.Get("en").Condition(code) }
+
+// wmoIcon maps a WMO weather code to a Weather Icons name (see internal/icons).
+func wmoIcon(code int, day bool) string {
+	pick := func(d, n string) string {
+		if day {
+			return "wi-" + d
+		}
+		return "wi-" + n
+	}
 	switch {
 	case code == 0:
-		return "Clear"
+		return pick("day-sunny", "night-clear")
 	case code == 1:
-		return "Mainly clear"
+		return pick("day-sunny-overcast", "night-alt-partly-cloudy")
 	case code == 2:
-		return "Partly cloudy"
+		return pick("day-cloudy", "night-alt-cloudy")
 	case code == 3:
-		return "Overcast"
+		return "wi-cloudy"
 	case code == 45 || code == 48:
-		return "Fog"
-	case code >= 51 && code <= 57:
-		return "Drizzle"
-	case code >= 61 && code <= 67:
-		return "Rain"
-	case code >= 71 && code <= 77:
-		return "Snow"
+		return pick("day-fog", "night-fog")
+	case code == 51 || code == 53 || code == 55:
+		return pick("day-sprinkle", "night-alt-sprinkle")
+	case code == 56 || code == 57:
+		return pick("day-sleet", "night-alt-sleet")
+	case code == 61 || code == 63 || code == 65:
+		return pick("day-rain", "night-alt-rain")
+	case code == 66 || code == 67:
+		return pick("day-rain-mix", "night-alt-rain-mix")
+	case code >= 71 && code <= 75, code == 85, code == 86:
+		return pick("day-snow", "night-alt-snow")
+	case code == 77:
+		return "wi-snowflake-cold"
 	case code >= 80 && code <= 82:
-		return "Showers"
-	case code == 85 || code == 86:
-		return "Snow showers"
-	case code >= 95:
-		return "Thunderstorm"
+		return pick("day-showers", "night-alt-showers")
+	case code == 95:
+		return pick("day-thunderstorm", "night-alt-thunderstorm")
+	case code == 96 || code == 99:
+		return pick("day-hail", "night-alt-hail")
 	}
-	return fmt.Sprintf("Code %d", code)
+	return "wi-na"
 }
 
 func (openMeteo) Sample(params Values) any {

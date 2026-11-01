@@ -12,6 +12,7 @@ import (
 	"github.com/TomiCode/cnsl/internal/assets"
 	"github.com/TomiCode/cnsl/internal/dashboard/gen"
 	"github.com/TomiCode/cnsl/internal/events"
+	"github.com/TomiCode/cnsl/internal/i18n"
 	"github.com/TomiCode/cnsl/internal/render"
 	"github.com/TomiCode/cnsl/internal/store"
 	"github.com/TomiCode/cnsl/internal/tmpl"
@@ -68,7 +69,7 @@ func (s *Server) screenResponse(ctx context.Context, sc store.Screen) (gen.Scree
 		Id: sum.Id, Name: sum.Name, Kind: sum.Kind, Layout: sum.Layout, ModelId: sum.ModelId,
 		RenderInterval: sum.RenderInterval, UpdatedAt: sum.UpdatedAt,
 		LatestRender: sum.LatestRender, LatestImage: sum.LatestImage,
-		FrameworkVersion: sc.FrameworkVersion, Head: sc.Head, Background: toBackground(bg),
+		FrameworkVersion: sc.FrameworkVersion, Head: sc.Head, Background: toBackground(bg), Language: sc.Language,
 		Regions: make([]gen.Region, 0, len(regions)),
 	}
 	for _, r := range regions {
@@ -196,6 +197,12 @@ func (s *Server) UpdateScreen(ctx context.Context, req gen.UpdateScreenRequestOb
 		sc.Layout = layout.Key
 	}
 
+	if b.Language != nil {
+		if *b.Language != "" && !i18n.Valid(*b.Language) {
+			return invalid(fmt.Sprintf("unknown language %q", *b.Language), nil), nil
+		}
+		sc.Language = *b.Language
+	}
 	if bg.JSON() != sc.Background {
 		_ = s.store.SetBackgroundIndex(ctx, sc.ID, 0) // a new slideshow starts from its first image
 	}

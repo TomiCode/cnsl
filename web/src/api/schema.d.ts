@@ -38,6 +38,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getSettings"];
+        /** Change global settings; screens using the defaults are re-rendered */
+        put: operations["updateSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/icons": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Icons for {{ icon "name" }}; each is also served as /icons/<name>.svg */
+        get: operations["listIcons"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/events": {
         parameters: {
             query?: never;
@@ -655,6 +689,13 @@ export interface components {
         };
         SystemInfo: {
             version: string;
+            /** @description Languages screens can be rendered in. */
+            languages: {
+                /** @example pl */
+                code: string;
+                /** @example Polski */
+                name: string;
+            }[];
             /** @example 3.4.4 */
             framework_version: string;
             /** @description Helper functions available in screen templates. */
@@ -884,6 +925,8 @@ export interface components {
         };
         Screen: components["schemas"]["ScreenSummary"] & {
             framework_version: string;
+            /** @description Language override; empty uses the global setting. */
+            language: string;
             background: components["schemas"]["Background"];
             /** @description Extra HTML for the page head (styles). */
             head: string;
@@ -901,6 +944,8 @@ export interface components {
             model_id: number;
             head: string;
             render_interval: number;
+            /** @description Language code from /system languages; empty uses the global setting. */
+            language?: string;
             /** @description A layout key from /system layouts. Changing it adds or removes regions. */
             layout: string;
             background: components["schemas"]["Background"];
@@ -995,6 +1040,20 @@ export interface components {
             /** Format: date-time */
             created_at: string;
         };
+        Settings: {
+            /** @description Default language of screens (a code from /system languages). */
+            language: string;
+        };
+        IconInfo: {
+            /** @example wi-day-sunny */
+            name: string;
+            /**
+             * @description wi = Weather Icons (filled), lucide = outline icons.
+             * @enum {string}
+             */
+            set: "wi" | "lucide";
+            tags?: string[];
+        };
         ComponentParam: {
             /** @description Field name inside the component (.name). */
             name: string;
@@ -1042,6 +1101,8 @@ export interface components {
             values?: {
                 [key: string]: unknown;
             };
+            /** @description Render in this language instead of the global setting. */
+            language?: string;
         };
         Snippet: {
             /** Format: int64 */
@@ -1192,6 +1253,15 @@ export interface components {
                 "application/json": components["schemas"]["Component"];
             };
         };
+        /** @description Global settings */
+        Settings: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Settings"];
+            };
+        };
         /** @description The snippet */
         Snippet: {
             headers: {
@@ -1282,6 +1352,55 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SystemInfo"];
+                };
+            };
+        };
+    };
+    getSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["Settings"];
+        };
+    };
+    updateSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Settings"];
+            };
+        };
+        responses: {
+            200: components["responses"]["Settings"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listIcons: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description All icons, sorted by name */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IconInfo"][];
                 };
             };
         };

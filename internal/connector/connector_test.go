@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/TomiCode/cnsl/internal/icons"
 	"github.com/TomiCode/cnsl/internal/secret"
 	"github.com/TomiCode/cnsl/internal/store"
 )
@@ -195,4 +196,16 @@ func TestOpenMeteoLive(t *testing.T) {
 		t.Fatalf("unexpected data: %v", m)
 	}
 	t.Logf("now: %v°, %v, pressure %v", cur["temperature"], cur["condition"], cur["pressure"])
+}
+
+func TestWeatherIconsExist(t *testing.T) {
+	codes := []int{0, 1, 2, 3, 45, 48, 51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 71, 73, 75, 77, 80, 81, 82, 85, 86, 95, 96, 99, 123}
+	for _, code := range codes {
+		for _, day := range []bool{true, false} {
+			name := wmoIcon(code, day)
+			if _, ok := icons.Lookup(name); !ok {
+				t.Errorf("code %d (day %v): no icon %q", code, day, name)
+			}
+		}
+	}
 }

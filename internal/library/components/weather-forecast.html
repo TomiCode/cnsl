@@ -3,16 +3,19 @@
 <div class="columns w--full">
   {{- range take $.days .daily }}
   <div class="column text--center">
-    <span class="title title--small">{{ printf "%.3s" .weekday }}</span>
+    <span class="title title--small">{{ date "Mon" .date }}</span>
+    {{- if $.icon_size }}{{ with .icon }}
+    <div class="flex flex--center">{{ icon . $.icon_size }}</div>
+    {{- end }}{{ end }}
     <span class="value value--tnums">{{ num 0 .max }}° / {{ num 0 .min }}°</span>
-    <span class="description">{{ .condition }}</span>
+    <span class="description">{{ condition .code }}</span>
     {{- if $.rain }}
-    <span class="label label--small">Rain {{ num 0 .precipitation_probability }}%</span>
+    <span class="label label--small">{{ t "rain_chance" }} {{ num 0 .precipitation_probability }}%</span>
     {{- end }}
   </div>
   {{- end }}
 </div>
 </div>
 {{- else }}
-<span class="label">No forecast data</span>
+<span class="label">{{ t "no_data" }}</span>
 {{- end }}

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/TomiCode/cnsl/internal/dashboard/gen"
+	"github.com/TomiCode/cnsl/internal/i18n"
 	"github.com/TomiCode/cnsl/internal/library"
 	"github.com/TomiCode/cnsl/internal/render"
 	"github.com/TomiCode/cnsl/internal/store"
@@ -234,6 +235,9 @@ func (s *Server) PreviewComponent(ctx context.Context, req gen.PreviewComponentR
 	}
 	if req.Body.Values != nil {
 		rreq.Values = *req.Body.Values
+	}
+	if req.Body.Language != nil && i18n.Valid(*req.Body.Language) {
+		rreq.Lang = *req.Body.Language
 	}
 	ctx, cancel := context.WithTimeout(ctx, previewTimeout)
 	defer cancel()

@@ -22,6 +22,7 @@ import (
 	"github.com/TomiCode/cnsl/internal/events"
 	"github.com/TomiCode/cnsl/internal/firmware"
 	"github.com/TomiCode/cnsl/internal/httpx"
+	"github.com/TomiCode/cnsl/internal/icons"
 	"github.com/TomiCode/cnsl/internal/imaging"
 	"github.com/TomiCode/cnsl/internal/library"
 	"github.com/TomiCode/cnsl/internal/render"
@@ -140,6 +141,7 @@ func run() error {
 	// What the headless browser loads while rendering. The framework CSS hard-codes /fonts/.
 	dashMux.Handle("/internal/render/", renderer.Handler())
 	dashMux.Handle("/fonts/", http.StripPrefix("/fonts/", assets.FontsHandler()))
+	dashMux.Handle("GET /icons/", http.StripPrefix("/icons", icons.Handler()))
 	// Original uploads (content-hash names) for thumbnails in the dashboard.
 	dashMux.Handle("GET /uploads/", http.StripPrefix("/uploads/", httpx.Immutable(http.FileServer(http.Dir(cfg.UploadsDir())))))
 	dashMux.Handle("/", web.Handler())

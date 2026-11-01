@@ -25,6 +25,7 @@ var pageTemplate = template.Must(template.New("page").Parse(`<!doctype html>
   .mashup-cell:has(> .cnsl-transparent) {
     background: transparent !important; background-image: none !important;
   }
+  .cnsl-icon { flex-shrink: 0; vertical-align: middle; }
   .cnsl-error { margin: 8px; padding: 8px; border: 2px solid #000; font: 14px/1.3 monospace; white-space: pre-wrap; background: #fff; }
 {{- if .Background }}
   .cnsl-bg { position: fixed; left: 0; top: 0; z-index: 0; image-rendering: pixelated; }

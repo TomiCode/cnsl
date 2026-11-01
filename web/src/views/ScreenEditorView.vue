@@ -40,8 +40,10 @@ const id = computed(() => Number(route.params.id))
 const screen = ref<Schemas['Screen'] | null>(null)
 const functions = ref<string[]>([])
 const layouts = ref<Layout[]>([])
+const languages = ref<Schemas['SystemInfo']['languages']>([])
 const draft = reactive({
   name: '',
+  language: '',
   model_id: 0,
   render_interval: 900,
   head: '',
@@ -75,6 +77,7 @@ const freeTemplate = `<span class="value value--large value--tnums">{{ date "15:
 function fromScreen(s: Schemas['Screen']): Draft {
   return {
     name: s.name,
+    language: s.language,
     model_id: s.model_id,
     render_interval: s.render_interval,
     head: s.head,
@@ -126,6 +129,7 @@ onMounted(async () => {
     const system = unwrap(sys)
     functions.value = system.template_functions
     layouts.value = system.layouts
+    languages.value = system.languages
     reset(unwrap(sc))
     await loadRenders()
     void runPreview()
@@ -212,6 +216,7 @@ async function save() {
       params: { path: { id: id.value } },
       body: {
         name: draft.name,
+        language: draft.language,
         model_id: draft.model_id,
         render_interval: draft.render_interval,
         head: draft.head,
@@ -342,6 +347,10 @@ const num = 'w-20 rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm f
       </select>
       <select v-if="!isImage" :value="draft.layout" :class="input" aria-label="Layout" @change="changeLayout(($event.target as HTMLSelectElement).value)">
         <option v-for="l in layouts" :key="l.key" :value="l.key">{{ l.name }}</option>
+      </select>
+      <select v-if="!isImage" v-model="draft.language" :class="input" aria-label="Language" title="Language of dates and labels">
+        <option value="">Default language</option>
+        <option v-for="l in languages" :key="l.code" :value="l.code">{{ l.name }}</option>
       </select>
       <label class="flex items-center gap-1.5 text-sm text-zinc-500">
         every

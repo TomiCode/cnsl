@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/TomiCode/cnsl/internal/connector"
+	"github.com/TomiCode/cnsl/internal/i18n"
 	"github.com/TomiCode/cnsl/internal/imaging"
 	"github.com/TomiCode/cnsl/internal/library"
 	"github.com/TomiCode/cnsl/internal/store"
@@ -163,7 +164,12 @@ func (r *Renderer) Render(ctx context.Context, req Request) (Result, error) {
 	if err != nil {
 		return Result{}, fmt.Errorf("load components: %w", err)
 	}
+	lang, err := r.language(ctx, sc.Language)
+	if err != nil {
+		return Result{}, err
+	}
 	html, errs := compose(page{screen: sc, model: model, background: bgURL, data: dataFor, lib: lib}, regions, tmpl.Context{
+		Lang:   lang,
 		Now:    time.Now().In(r.tz),
 		Screen: tmpl.ScreenInfo{Name: sc.Name, Width: model.Width, Height: model.Height, BitDepth: model.BitDepth},
 		Data:   map[string]any{},
@@ -177,6 +183,14 @@ func (r *Renderer) Render(ctx context.Context, req Request) (Result, error) {
 	res.DataErrors = dataErrors
 	res.Duration = time.Since(start)
 	return res, nil
+}
+
+// language is the screen's override, else the global setting.
+func (r *Renderer) language(ctx context.Context, override string) (string, error) {
+	if override != "" {
+		return override, nil
+	}
+	return r.store.Setting(ctx, store.SettingLanguage, i18n.Default)
 }
 
 // RenderAndStore renders a screen and records the result. A render with template errors is
