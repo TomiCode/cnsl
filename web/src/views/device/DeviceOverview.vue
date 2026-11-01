@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { Eye, EyeOff, TriangleAlert } from 'lucide-vue-next'
+import { RouterLink } from 'vue-router'
+import { Eye, EyeOff, RotateCcw, TriangleAlert } from 'lucide-vue-next'
 import DeviceVitals from '@/components/DeviceVitals.vue'
 import { useDevicesStore, type Device } from '@/stores/devices'
 import { usePlaylistsStore } from '@/stores/playlists'
@@ -72,6 +73,48 @@ async function save() {
   }
 }
 
+// Firmware updates
+const otaBusy = ref(false)
+const otaText = computed(() => {
+  const o = props.device.ota
+  const target = o?.target_version
+  switch (o?.state) {
+    case 'current':
+      return `Runs the target firmware ${target}.`
+    case 'off':
+      return `Target ${target} — turn on auto-update to install it.`
+    case 'due':
+      return `Will be offered ${target} at the next wake.`
+    case 'pending':
+      return `Offered ${target} ${timeAgo(o.offered_at)} (attempt ${o.attempts} of 3). The device reports its new version after it reboots.`
+    case 'gave_up':
+      return `Offered ${target} 3 times, but the device still reports ${props.device.firmware_version ?? 'another version'}. Check the device's logs, or the version label of the firmware.`
+    default:
+      return 'Its model has no target firmware.'
+  }
+})
+async function setAutoUpdate(on: boolean) {
+  otaBusy.value = true
+  message.value = null
+  try {
+    await store.update(props.device.id, { auto_update: on })
+  } catch (e) {
+    message.value = { ok: false, text: (e as Error).message }
+  } finally {
+    otaBusy.value = false
+  }
+}
+async function retryOTA() {
+  otaBusy.value = true
+  try {
+    await store.retryOTA(props.device.id)
+  } catch (e) {
+    message.value = { ok: false, text: (e as Error).message }
+  } finally {
+    otaBusy.value = false
+  }
+}
+
 const input =
   'w-full rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm focus:border-zinc-500 focus:outline-none'
 </script>
@@ -128,6 +171,40 @@ const input =
         <p v-if="device.calibrating_until && new Date(device.calibrating_until) > new Date()" class="mt-2 text-xs text-amber-700">
           Showing the calibration pattern until {{ dateTime(device.calibrating_until) }}.
         </p>
+      </div>
+
+      <div class="rounded-lg border border-zinc-200 bg-white p-4">
+        <div class="mb-1 flex items-center justify-between text-sm">
+          <span class="font-medium">Firmware</span>
+          <span class="font-mono text-xs text-zinc-500">{{ device.firmware_version ?? 'unknown' }}</span>
+        </div>
+        <p class="mb-3 text-xs text-zinc-500">
+          {{ otaText }}
+          <RouterLink to="/firmware" class="underline hover:text-zinc-900">Manage firmware</RouterLink>
+        </p>
+        <div class="flex flex-wrap items-center gap-3">
+          <label class="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              class="rounded border-zinc-300"
+              :checked="device.auto_update"
+              :disabled="otaBusy"
+              @change="setAutoUpdate(($event.target as HTMLInputElement).checked)"
+            />
+            <span class="text-zinc-600">Install updates over the air</span>
+          </label>
+          <button
+            v-if="device.ota?.state === 'gave_up' || device.ota?.state === 'pending'"
+            type="button"
+            class="inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-900 disabled:opacity-50"
+            :disabled="otaBusy"
+            title="Offer the update again at the next wake"
+            @click="retryOTA"
+          >
+            <RotateCcw class="size-3.5" />
+            Retry
+          </button>
+        </div>
       </div>
 
       <form class="rounded-lg border border-zinc-200 bg-white p-4" @submit.prevent="save">

@@ -259,6 +259,80 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/device-models/{id}/firmware": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ModelID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Choose the firmware devices of this model are updated to (null = none) */
+        put: operations["setModelFirmware"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/firmware": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listFirmware"];
+        put?: never;
+        /** Upload an app image (.bin); it is checked before it can be offered */
+        post: operations["uploadFirmware"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/firmware/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["FirmwareID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a firmware image; models using it as target get none */
+        delete: operations["deleteFirmware"];
+        options?: never;
+        head?: never;
+        patch: operations["updateFirmware"];
+        trace?: never;
+    };
+    "/devices/{id}/ota/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["DeviceID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Clear the update attempts so the target firmware is offered again at the next wake */
+        post: operations["retryDeviceOTA"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/device-models/{id}/tone-curve": {
         parameters: {
             query?: never;
@@ -729,6 +803,13 @@ export interface components {
             /** @enum {integer} */
             bit_depth: 1 | 2 | 4;
             tone_curve: components["schemas"]["ToneCurve"];
+            /** @description Chip the model's firmware is built for (esp32s3, …); empty = no updates. */
+            chip?: string;
+            /**
+             * Format: int64
+             * @description Firmware devices of this model are updated to (when they opt in).
+             */
+            firmware_id?: number | null;
         };
         /** @enum {string} */
         DeviceStatus: "pending" | "active" | "disabled";
@@ -770,8 +851,47 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
             latest?: components["schemas"]["Telemetry"];
+            /** @description Install the model's target firmware over the air. */
+            auto_update?: boolean;
+            ota?: components["schemas"]["OTAStatus"];
+        };
+        OTAStatus: {
+            /**
+             * @description off = auto-update disabled; no_target = the model has no target firmware;
+             *     current = runs the target; due = offered at the next wake; pending = offered, waiting
+             *     for the device to report the new version; gave_up = offered 3 times without success.
+             * @enum {string}
+             */
+            state: "off" | "no_target" | "current" | "due" | "pending" | "gave_up";
+            target_version?: string;
+            /** Format: int64 */
+            target_id?: number;
+            attempts?: number;
+            /** Format: date-time */
+            offered_at?: string;
+        };
+        Firmware: {
+            /** Format: int64 */
+            id: number;
+            /** @description What devices report after installing it. */
+            version: string;
+            /** @example esp32s3 */
+            chip: string;
+            project: string;
+            built: string;
+            idf: string;
+            /** Format: int64 */
+            size: number;
+            sha256: string;
+            filename: string;
+            notes: string;
+            /** Format: date-time */
+            created_at: string;
+            /** @description Models that use it as their target. */
+            model_ids: number[];
         };
         DeviceUpdate: {
+            auto_update?: boolean;
             label?: string;
             /** Format: int64 */
             model_id?: number;
@@ -925,6 +1045,7 @@ export interface components {
         };
         Screen: components["schemas"]["ScreenSummary"] & {
             framework_version: string;
+            rotation: components["schemas"]["Rotation"];
             /** @description Language override; empty uses the global setting. */
             language: string;
             background: components["schemas"]["Background"];
@@ -946,6 +1067,7 @@ export interface components {
             render_interval: number;
             /** @description Language code from /system languages; empty uses the global setting. */
             language?: string;
+            rotation?: components["schemas"]["Rotation"];
             /** @description A layout key from /system layouts. Changing it adds or removes regions. */
             layout: string;
             background: components["schemas"]["Background"];
@@ -1040,6 +1162,13 @@ export interface components {
             /** Format: date-time */
             created_at: string;
         };
+        /**
+         * @description Clockwise degrees from the screen as designed to the panel. 0 = landscape, 90 = portrait
+         *     with the device turned left (counter-clockwise), 180 = upside down, 270 = portrait with
+         *     the device turned right. Portrait screens are designed at swapped width and height.
+         * @enum {integer}
+         */
+        Rotation: 0 | 90 | 180 | 270;
         Settings: {
             /** @description Default language of screens (a code from /system languages). */
             language: string;
@@ -1244,6 +1373,15 @@ export interface components {
                 "application/json": components["schemas"]["Connector"];
             };
         };
+        /** @description The firmware */
+        Firmware: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Firmware"];
+            };
+        };
         /** @description The component */
         Component: {
             headers: {
@@ -1296,6 +1434,7 @@ export interface components {
         PlaylistID: number;
         ModelID: number;
         ConnectorID: number;
+        FirmwareID: number;
         ComponentID: number;
         SnippetID: number;
         AssetID: number;
@@ -1650,6 +1789,141 @@ export interface operations {
         };
     };
     stopDeviceCalibration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["DeviceID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["Device"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    setModelFirmware: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ModelID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: int64 */
+                    firmware_id: number | null;
+                };
+            };
+        };
+        responses: {
+            /** @description The model */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeviceModel"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listFirmware: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Uploaded firmware images, newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Firmware"][];
+                };
+            };
+        };
+    };
+    uploadFirmware: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                    /**
+                     * @description The version devices report (FW-Version) after installing it. Guessed from the
+                     *     file name or the image when omitted.
+                     */
+                    version?: string;
+                    notes?: string;
+                };
+            };
+        };
+        responses: {
+            201: components["responses"]["Firmware"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    deleteFirmware: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["FirmwareID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateFirmware: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["FirmwareID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    version: string;
+                    notes?: string;
+                };
+            };
+        };
+        responses: {
+            200: components["responses"]["Firmware"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    retryDeviceOTA: {
         parameters: {
             query?: never;
             header?: never;

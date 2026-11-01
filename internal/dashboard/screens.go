@@ -70,7 +70,8 @@ func (s *Server) screenResponse(ctx context.Context, sc store.Screen) (gen.Scree
 		RenderInterval: sum.RenderInterval, UpdatedAt: sum.UpdatedAt,
 		LatestRender: sum.LatestRender, LatestImage: sum.LatestImage,
 		FrameworkVersion: sc.FrameworkVersion, Head: sc.Head, Background: toBackground(bg), Language: sc.Language,
-		Regions: make([]gen.Region, 0, len(regions)),
+		Rotation: gen.Rotation(sc.Rotation),
+		Regions:  make([]gen.Region, 0, len(regions)),
 	}
 	for _, r := range regions {
 		out.Regions = append(out.Regions, gen.Region{Id: r.ID, Key: r.Key, X: r.X, Y: r.Y, W: r.W, H: r.H, Z: r.Z,
@@ -174,6 +175,12 @@ func (s *Server) UpdateScreen(ctx context.Context, req gen.UpdateScreenRequestOb
 	if sc.Kind == "image" && bg.Kind == "none" {
 		return invalid("an image screen needs an image or a slideshow", nil), nil
 	}
+	if b.Rotation != nil {
+		if !render.ValidRotation(int(*b.Rotation)) {
+			return invalid(fmt.Sprintf("rotation must be 0, 90, 180 or 270, not %d", *b.Rotation), nil), nil
+		}
+		sc.Rotation = int(*b.Rotation)
+	}
 
 	var regions []store.Region
 	if sc.Kind == "template" {
@@ -181,7 +188,7 @@ func (s *Server) UpdateScreen(ctx context.Context, req gen.UpdateScreenRequestOb
 		if !ok {
 			return invalid(fmt.Sprintf("unknown layout %q", b.Layout), nil), nil
 		}
-		regions, err = s.mergeRegions(ctx, sc, model, layout, b.Regions)
+		regions, err = s.mergeRegions(ctx, sc, render.Oriented(model, sc.Rotation), layout, b.Regions)
 		if err != nil {
 			return invalid(err.Error(), nil), nil
 		}

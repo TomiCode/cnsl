@@ -38,7 +38,11 @@ func (s *Server) ListDevices(ctx context.Context, _ gen.ListDevicesRequestObject
 		if l, ok := latest[d.ID]; ok {
 			t = &l
 		}
-		out = append(out, toDevice(d, t))
+		gd := toDevice(d, t)
+		if st, err := s.devices.OTA(ctx, d); err == nil {
+			gd.Ota = toOTA(st)
+		}
+		out = append(out, gd)
 	}
 	return out, nil
 }
@@ -53,7 +57,13 @@ func (s *Server) deviceResponse(ctx context.Context, d store.Device) (gen.Device
 	if l, ok := latest[d.ID]; ok {
 		t = &l
 	}
-	return gen.DeviceJSONResponse(toDevice(d, t)), nil
+	gd := toDevice(d, t)
+	st, err := s.devices.OTA(ctx, d)
+	if err != nil {
+		return gen.DeviceJSONResponse{}, err
+	}
+	gd.Ota = toOTA(st)
+	return gen.DeviceJSONResponse(gd), nil
 }
 
 func (s *Server) GetDevice(ctx context.Context, req gen.GetDeviceRequestObject) (gen.GetDeviceResponseObject, error) {
@@ -84,6 +94,12 @@ func (s *Server) UpdateDevice(ctx context.Context, req gen.UpdateDeviceRequestOb
 		return gen.UpdateDevice422ApplicationProblemPlusJSONResponse(invalidProblem(err)), nil
 	case err != nil:
 		return nil, err
+	}
+	if b.AutoUpdate != nil && *b.AutoUpdate != d.AutoUpdate {
+		if err := s.store.SetAutoUpdate(ctx, d.ID, *b.AutoUpdate); err != nil {
+			return nil, err
+		}
+		d.AutoUpdate = *b.AutoUpdate
 	}
 	resp, err := s.deviceResponse(ctx, d)
 	return gen.UpdateDevice200JSONResponse{DeviceJSONResponse: resp}, err

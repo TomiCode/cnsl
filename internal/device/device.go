@@ -136,6 +136,8 @@ type DisplayResult struct {
 	Outcome     DisplayOutcome
 	Filename    string
 	RefreshRate int
+	// Firmware is the file name of a firmware image the device should install, or "".
+	Firmware string
 }
 
 // Display handles /api/display: records telemetry and decides what the device should show.
@@ -159,6 +161,10 @@ func (s *Service) Display(ctx context.Context, req DisplayRequest) (DisplayResul
 			Outcome:     ShowImage,
 			Filename:    filename,
 			RefreshRate: refreshRate(now.In(s.tz), rate, d.SleepStart.String, d.SleepEnd.String),
+		}
+		if result.Firmware, err = s.offerFirmware(ctx, d, now); err != nil {
+			s.log.WarnContext(ctx, "firmware offer", "device", d.ID, "err", err)
+			result.Firmware = ""
 		}
 	}
 

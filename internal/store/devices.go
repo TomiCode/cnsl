@@ -33,6 +33,8 @@ type DeviceModel struct {
 	Builtin       bool           `db:"builtin"`
 	Scale         float64        `db:"scale"`
 	ScreenClasses string         `db:"screen_classes"`
+	Chip          string         `db:"chip"`        // esp32s3, …; "" = no OTA (virtual)
+	FirmwareID    sql.NullInt64  `db:"firmware_id"` // target firmware for OTA
 }
 
 type Device struct {
@@ -56,6 +58,10 @@ type Device struct {
 	UpdatedAt        Time           `db:"updated_at"`
 	PlaylistID       sql.NullInt64  `db:"playlist_id"`
 	CalibratingUntil NullTime       `db:"calibrating_until"`
+	AutoUpdate       bool           `db:"auto_update"`
+	OTAFirmwareID    sql.NullInt64  `db:"ota_firmware_id"`
+	OTAAttempts      int            `db:"ota_attempts"`
+	OTAOfferedAt     NullTime       `db:"ota_offered_at"`
 }
 
 func (s *Store) DeviceModels(ctx context.Context) ([]DeviceModel, error) {

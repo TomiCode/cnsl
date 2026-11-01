@@ -40,6 +40,11 @@ func (c Config) CacheDir() string {
 }
 
 // ImagesDir holds rendered device images.
+// FirmwareDir holds uploaded firmware images for OTA updates.
+func (c Config) FirmwareDir() string {
+	return filepath.Join(c.DataDir, "firmware")
+}
+
 func (c Config) ImagesDir() string {
 	return filepath.Join(c.DataDir, "images")
 }

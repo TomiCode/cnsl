@@ -71,10 +71,10 @@ type Request struct {
 }
 
 type Result struct {
-	Raw      []byte // browser screenshot (8-bit, before quantization)
-	Device   []byte // PNG exactly as a device would receive it
-	Panel    []byte // how the panel shows it, using the model's measured gray levels
-	Levels   *image.Gray
+	Raw      []byte      // browser screenshot (8-bit, before quantization)
+	Device   []byte      // PNG exactly as a device would receive it (turned to the panel)
+	Panel    []byte      // how the panel shows it, using the model's measured gray levels (as designed)
+	Levels   *image.Gray // device levels, turned to the panel
 	BitDepth int
 	Errors   []*tmpl.Error
 	// DataErrors are connector problems by binding alias (the render still happens, with
@@ -94,6 +94,8 @@ func (r *Renderer) Render(ctx context.Context, req Request) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
+	// Everything below works on the screen as designed; the result is turned to the panel last.
+	model = Oriented(model, sc.Rotation)
 	regions, err := r.store.Regions(ctx, sc.ID)
 	if err != nil {
 		return Result{}, err
@@ -126,6 +128,9 @@ func (r *Renderer) Render(ctx context.Context, req Request) (Result, error) {
 		}
 		curve, _ := imaging.ParseToneCurve(model.ToneCurve.String)
 		res, err := levelsResult(bgLevels, model.BitDepth, curve.Palette(model.BitDepth))
+		if err == nil {
+			err = res.rotate(sc.Rotation)
+		}
 		res.Duration = time.Since(start)
 		return res, err
 	}
@@ -179,10 +184,28 @@ func (r *Renderer) Render(ctx context.Context, req Request) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
+	if err := res.rotate(sc.Rotation); err != nil {
+		return Result{}, err
+	}
 	res.Errors = errs
 	res.DataErrors = dataErrors
 	res.Duration = time.Since(start)
 	return res, nil
+}
+
+// rotate turns the device image (and stored levels) to the panel. Raw and Panel stay as designed,
+// for previews.
+func (res *Result) rotate(degrees int) error {
+	if degrees == 0 || res.Levels == nil {
+		return nil
+	}
+	res.Levels = imaging.Rotate(res.Levels, degrees)
+	var device bytes.Buffer
+	if err := imaging.EncodePNG(&device, res.Levels, res.BitDepth); err != nil {
+		return err
+	}
+	res.Device = device.Bytes()
+	return nil
 }
 
 // language is the screen's override, else the global setting.

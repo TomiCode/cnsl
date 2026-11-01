@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
 import { RouterLink, RouterView } from 'vue-router'
-import { Blocks, Images, LayoutDashboard, MonitorSmartphone, PanelsTopLeft, ListVideo, Plug, Settings } from 'lucide-vue-next'
+import { Blocks, Cpu, Images, LayoutDashboard, MonitorSmartphone, PanelsTopLeft, ListVideo, Plug, Settings } from 'lucide-vue-next'
 import { useSystemStore } from '@/stores/system'
 
 const system = useSystemStore()
@@ -15,6 +15,7 @@ const nav = [
   { to: '/images', label: 'Images', icon: Images },
   { to: '/connectors', label: 'Connectors', icon: Plug },
   { to: '/library', label: 'Library', icon: Blocks },
+  { to: '/firmware', label: 'Firmware', icon: Cpu },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]
 </script>

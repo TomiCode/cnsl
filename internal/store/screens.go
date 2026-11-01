@@ -21,6 +21,7 @@ type Screen struct {
 	Background       string `db:"background"`       // JSON, see render.Background
 	BackgroundIndex  int    `db:"background_index"` // slideshow position
 	Language         string `db:"language"`         // "" = the global setting
+	Rotation         int    `db:"rotation"`         // clockwise degrees from the designed image to the panel
 }
 
 type Region struct {
@@ -87,9 +88,9 @@ func (s *Store) CreateScreen(ctx context.Context, sc *Screen, regions []Region) 
 	}
 	res, err := tx.NamedExecContext(ctx, `
 		INSERT INTO screens (name, model_id, framework_version, head, render_interval, created_at, updated_at,
-			kind, layout, background, language)
+			kind, layout, background, language, rotation)
 		VALUES (:name, :model_id, :framework_version, :head, :render_interval, :created_at, :updated_at,
-			:kind, :layout, :background, :language)`, sc)
+			:kind, :layout, :background, :language, :rotation)`, sc)
 	if err != nil {
 		return fmt.Errorf("insert screen: %w", err)
 	}
@@ -124,7 +125,8 @@ func (s *Store) UpdateScreen(ctx context.Context, sc *Screen, regions []Region) 
 	res, err := tx.NamedExecContext(ctx, `
 		UPDATE screens SET name = :name, model_id = :model_id, framework_version = :framework_version,
 			head = :head, render_interval = :render_interval, updated_at = :updated_at,
-			kind = :kind, layout = :layout, background = :background, language = :language
+			kind = :kind, layout = :layout, background = :background, language = :language,
+			rotation = :rotation
 		WHERE id = :id`, sc)
 	if err != nil {
 		return fmt.Errorf("update screen: %w", err)

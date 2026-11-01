@@ -120,6 +120,7 @@ func run() error {
 		Renderer:        renderer,
 		Scheduler:       scheduler,
 		UploadsDir:      cfg.UploadsDir(),
+		FirmwareDir:     cfg.FirmwareDir(),
 		Connectors:      connectors,
 	}).Handler()
 	if err != nil {
@@ -127,10 +128,11 @@ func run() error {
 	}
 
 	deviceHandler := firmware.Handler(firmware.Options{
-		Devices:   devices,
-		ImagesDir: cfg.ImagesDir(),
-		PublicURL: cfg.DevicePublicURL,
-		Log:       logger,
+		Devices:     devices,
+		ImagesDir:   cfg.ImagesDir(),
+		FirmwareDir: cfg.FirmwareDir(),
+		PublicURL:   cfg.DevicePublicURL,
+		Log:         logger,
 	})
 
 	dashMux := http.NewServeMux()

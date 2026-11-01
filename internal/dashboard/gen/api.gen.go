@@ -175,19 +175,19 @@ func (e DeviceModelBitDepth) Valid() bool {
 
 // Defines values for DeviceStatus.
 const (
-	Active   DeviceStatus = "active"
-	Disabled DeviceStatus = "disabled"
-	Pending  DeviceStatus = "pending"
+	DeviceStatusActive   DeviceStatus = "active"
+	DeviceStatusDisabled DeviceStatus = "disabled"
+	DeviceStatusPending  DeviceStatus = "pending"
 )
 
 // Valid indicates whether the value is a known member of the DeviceStatus enum.
 func (e DeviceStatus) Valid() bool {
 	switch e {
-	case Active:
+	case DeviceStatusActive:
 		return true
-	case Disabled:
+	case DeviceStatusDisabled:
 		return true
-	case Pending:
+	case DeviceStatusPending:
 		return true
 	default:
 		return false
@@ -329,6 +329,36 @@ func (e ImageFit) Valid() bool {
 	}
 }
 
+// Defines values for OTAStatusState.
+const (
+	OTAStatusStateCurrent  OTAStatusState = "current"
+	OTAStatusStateDue      OTAStatusState = "due"
+	OTAStatusStateGaveUp   OTAStatusState = "gave_up"
+	OTAStatusStateNoTarget OTAStatusState = "no_target"
+	OTAStatusStateOff      OTAStatusState = "off"
+	OTAStatusStatePending  OTAStatusState = "pending"
+)
+
+// Valid indicates whether the value is a known member of the OTAStatusState enum.
+func (e OTAStatusState) Valid() bool {
+	switch e {
+	case OTAStatusStateCurrent:
+		return true
+	case OTAStatusStateDue:
+		return true
+	case OTAStatusStateGaveUp:
+		return true
+	case OTAStatusStateNoTarget:
+		return true
+	case OTAStatusStateOff:
+		return true
+	case OTAStatusStatePending:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RenderStatus.
 const (
 	RenderStatusError RenderStatus = "error"
@@ -341,6 +371,30 @@ func (e RenderStatus) Valid() bool {
 	case RenderStatusError:
 		return true
 	case RenderStatusOk:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for Rotation.
+const (
+	N0   Rotation = 0
+	N180 Rotation = 180
+	N270 Rotation = 270
+	N90  Rotation = 90
+)
+
+// Valid indicates whether the value is a known member of the Rotation enum.
+func (e Rotation) Valid() bool {
+	switch e {
+	case N0:
+		return true
+	case N180:
+		return true
+	case N270:
+		return true
+	case N90:
 		return true
 	default:
 		return false
@@ -538,6 +592,9 @@ type Device struct {
 	ApiKey     string     `json:"api_key"`
 	ApprovedAt *time.Time `json:"approved_at,omitempty"`
 
+	// AutoUpdate Install the model's target firmware over the air.
+	AutoUpdate *bool `json:"auto_update,omitempty"`
+
 	// CalibratingUntil While in the future, the device shows the gray calibration pattern.
 	CalibratingUntil *time.Time `json:"calibrating_until,omitempty"`
 	CreatedAt        time.Time  `json:"created_at"`
@@ -551,9 +608,10 @@ type Device struct {
 	Latest     *Telemetry `json:"latest,omitempty"`
 
 	// Mac Example: AA:BB:CC:DD:EE:FF
-	Mac        string `json:"mac"`
-	ModelId    *int64 `json:"model_id,omitempty"`
-	PlaylistId *int64 `json:"playlist_id,omitempty"`
+	Mac        string     `json:"mac"`
+	ModelId    *int64     `json:"model_id,omitempty"`
+	Ota        *OTAStatus `json:"ota,omitempty"`
+	PlaylistId *int64     `json:"playlist_id,omitempty"`
 
 	// RefreshRate Seconds between wakes.
 	RefreshRate    int     `json:"refresh_rate"`
@@ -593,14 +651,20 @@ type DeviceLogPage struct {
 
 // DeviceModel defines model for DeviceModel.
 type DeviceModel struct {
-	BitDepth      DeviceModelBitDepth `json:"bit_depth"`
-	FirmwareModel *string             `json:"firmware_model,omitempty"`
-	Height        int                 `json:"height"`
-	Id            int64               `json:"id"`
-	Key           string              `json:"key"`
-	Name          string              `json:"name"`
-	ToneCurve     ToneCurve           `json:"tone_curve"`
-	Width         int                 `json:"width"`
+	BitDepth DeviceModelBitDepth `json:"bit_depth"`
+
+	// Chip Chip the model's firmware is built for (esp32s3, …); empty = no updates.
+	Chip *string `json:"chip,omitempty"`
+
+	// FirmwareId Firmware devices of this model are updated to (when they opt in).
+	FirmwareId    *int64    `json:"firmware_id,omitempty"`
+	FirmwareModel *string   `json:"firmware_model,omitempty"`
+	Height        int       `json:"height"`
+	Id            int64     `json:"id"`
+	Key           string    `json:"key"`
+	Name          string    `json:"name"`
+	ToneCurve     ToneCurve `json:"tone_curve"`
+	Width         int       `json:"width"`
 }
 
 // DeviceModelBitDepth defines model for DeviceModel.BitDepth.
@@ -611,6 +675,7 @@ type DeviceStatus string
 
 // DeviceUpdate defines model for DeviceUpdate.
 type DeviceUpdate struct {
+	AutoUpdate  *bool   `json:"auto_update,omitempty"`
 	Label       *string `json:"label,omitempty"`
 	ModelId     *int64  `json:"model_id,omitempty"`
 	RefreshRate *int    `json:"refresh_rate,omitempty"`
@@ -638,6 +703,28 @@ type EventType string
 type FieldError struct {
 	Field   *string `json:"field,omitempty"`
 	Message string  `json:"message"`
+}
+
+// Firmware defines model for Firmware.
+type Firmware struct {
+	Built string `json:"built"`
+
+	// Chip Example: esp32s3
+	Chip      string    `json:"chip"`
+	CreatedAt time.Time `json:"created_at"`
+	Filename  string    `json:"filename"`
+	Id        int64     `json:"id"`
+	Idf       string    `json:"idf"`
+
+	// ModelIds Models that use it as their target.
+	ModelIds []int64 `json:"model_ids"`
+	Notes    string  `json:"notes"`
+	Project  string  `json:"project"`
+	Sha256   string  `json:"sha256"`
+	Size     int64   `json:"size"`
+
+	// Version What devices report after installing it.
+	Version string `json:"version"`
 }
 
 // Health defines model for Health.
@@ -690,6 +777,24 @@ type Layout struct {
 		Y    float32 `json:"y"`
 	} `json:"slots"`
 }
+
+// OTAStatus defines model for OTAStatus.
+type OTAStatus struct {
+	Attempts  *int       `json:"attempts,omitempty"`
+	OfferedAt *time.Time `json:"offered_at,omitempty"`
+
+	// State off = auto-update disabled; no_target = the model has no target firmware;
+	// current = runs the target; due = offered at the next wake; pending = offered, waiting
+	// for the device to report the new version; gave_up = offered 3 times without success.
+	State         OTAStatusState `json:"state"`
+	TargetId      *int64         `json:"target_id,omitempty"`
+	TargetVersion *string        `json:"target_version,omitempty"`
+}
+
+// OTAStatusState off = auto-update disabled; no_target = the model has no target firmware;
+// current = runs the target; due = offered at the next wake; pending = offered, waiting
+// for the device to report the new version; gave_up = offered 3 times without success.
+type OTAStatusState string
 
 // Playlist defines model for Playlist.
 type Playlist struct {
@@ -790,6 +895,11 @@ type Render struct {
 // RenderStatus defines model for Render.Status.
 type RenderStatus string
 
+// Rotation Clockwise degrees from the screen as designed to the panel. 0 = landscape, 90 = portrait
+// with the device turned left (counter-clockwise), 180 = upside down, 270 = portrait with
+// the device turned right. Portrait screens are designed at swapped width and height.
+type Rotation int
+
 // Screen defines model for Screen.
 type Screen struct {
 	Background       Background `json:"background"`
@@ -806,14 +916,19 @@ type Screen struct {
 	Language string `json:"language"`
 
 	// LatestImage Filename of the newest successful render.
-	LatestImage    *string   `json:"latest_image,omitempty"`
-	LatestRender   *Render   `json:"latest_render,omitempty"`
-	Layout         string    `json:"layout"`
-	ModelId        int64     `json:"model_id"`
-	Name           string    `json:"name"`
-	Regions        []Region  `json:"regions"`
-	RenderInterval int       `json:"render_interval"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	LatestImage    *string  `json:"latest_image,omitempty"`
+	LatestRender   *Render  `json:"latest_render,omitempty"`
+	Layout         string   `json:"layout"`
+	ModelId        int64    `json:"model_id"`
+	Name           string   `json:"name"`
+	Regions        []Region `json:"regions"`
+	RenderInterval int      `json:"render_interval"`
+
+	// Rotation Clockwise degrees from the screen as designed to the panel. 0 = landscape, 90 = portrait
+	// with the device turned left (counter-clockwise), 180 = upside down, 270 = portrait with
+	// the device turned right. Portrait screens are designed at swapped width and height.
+	Rotation  Rotation  `json:"rotation"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // ScreenCreate defines model for ScreenCreate.
@@ -872,6 +987,11 @@ type ScreenUpdate struct {
 		Z           *int   `json:"z,omitempty"`
 	} `json:"regions"`
 	RenderInterval int `json:"render_interval"`
+
+	// Rotation Clockwise degrees from the screen as designed to the panel. 0 = landscape, 90 = portrait
+	// with the device turned left (counter-clockwise), 180 = upside down, 270 = portrait with
+	// the device turned right. Portrait screens are designed at swapped width and height.
+	Rotation *Rotation `json:"rotation,omitempty"`
 }
 
 // Settings defines model for Settings.
@@ -990,6 +1110,9 @@ type ConnectorID = int64
 // DeviceID defines model for DeviceID.
 type DeviceID = int64
 
+// FirmwareID defines model for FirmwareID.
+type FirmwareID = int64
+
 // Limit defines model for Limit.
 type Limit = int
 
@@ -1025,6 +1148,11 @@ type TestConnectorJSONBody struct {
 	Params *map[string]interface{} `json:"params,omitempty"`
 }
 
+// SetModelFirmwareJSONBody defines parameters for SetModelFirmware.
+type SetModelFirmwareJSONBody struct {
+	FirmwareId *int64 `json:"firmware_id"`
+}
+
 // ListDeviceLogsParams defines parameters for ListDeviceLogs.
 type ListDeviceLogsParams struct {
 	// BeforeId Page backwards from this log id (exclusive).
@@ -1048,6 +1176,22 @@ type SetDevicePlaylistJSONBody struct {
 type ListDeviceTelemetryParams struct {
 	BeforeId *int64 `form:"before_id,omitempty" json:"before_id,omitempty"`
 	Limit    *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// UploadFirmwareMultipartBody defines parameters for UploadFirmware.
+type UploadFirmwareMultipartBody struct {
+	File  openapi_types.File `json:"file"`
+	Notes *string            `json:"notes,omitempty"`
+
+	// Version The version devices report (FW-Version) after installing it. Guessed from the
+	// file name or the image when omitted.
+	Version *string `json:"version,omitempty"`
+}
+
+// UpdateFirmwareJSONBody defines parameters for UpdateFirmware.
+type UpdateFirmwareJSONBody struct {
+	Notes   *string `json:"notes,omitempty"`
+	Version string  `json:"version"`
 }
 
 // ReplaceBindingsJSONBody defines parameters for ReplaceBindings.
@@ -1082,6 +1226,9 @@ type UpdateConnectorJSONRequestBody = ConnectorInput
 // TestConnectorJSONRequestBody defines body for TestConnector for application/json ContentType.
 type TestConnectorJSONRequestBody TestConnectorJSONBody
 
+// SetModelFirmwareJSONRequestBody defines body for SetModelFirmware for application/json ContentType.
+type SetModelFirmwareJSONRequestBody SetModelFirmwareJSONBody
+
 // SetToneCurveJSONRequestBody defines body for SetToneCurve for application/json ContentType.
 type SetToneCurveJSONRequestBody = ToneCurve
 
@@ -1093,6 +1240,12 @@ type UpdateDeviceJSONRequestBody = DeviceUpdate
 
 // SetDevicePlaylistJSONRequestBody defines body for SetDevicePlaylist for application/json ContentType.
 type SetDevicePlaylistJSONRequestBody SetDevicePlaylistJSONBody
+
+// UploadFirmwareMultipartRequestBody defines body for UploadFirmware for multipart/form-data ContentType.
+type UploadFirmwareMultipartRequestBody UploadFirmwareMultipartBody
+
+// UpdateFirmwareJSONRequestBody defines body for UpdateFirmware for application/json ContentType.
+type UpdateFirmwareJSONRequestBody UpdateFirmwareJSONBody
 
 // CreatePlaylistJSONRequestBody defines body for CreatePlaylist for application/json ContentType.
 type CreatePlaylistJSONRequestBody = PlaylistInput
@@ -1177,6 +1330,9 @@ type ServerInterface interface {
 
 	// (GET /device-models)
 	ListDeviceModels(w http.ResponseWriter, r *http.Request)
+	// SetModelFirmware Choose the firmware devices of this model are updated to (null = none)
+	// (PUT /device-models/{id}/firmware)
+	SetModelFirmware(w http.ResponseWriter, r *http.Request, id ModelID)
 	// SetToneCurve Save a model's gray tone curve; its screens re-render
 	// (PUT /device-models/{id}/tone-curve)
 	SetToneCurve(w http.ResponseWriter, r *http.Request, id ModelID)
@@ -1210,12 +1366,27 @@ type ServerInterface interface {
 	// ListDeviceLogs Device logs, newest first
 	// (GET /devices/{id}/logs)
 	ListDeviceLogs(w http.ResponseWriter, r *http.Request, id DeviceID, params ListDeviceLogsParams)
+	// RetryDeviceOTA Clear the update attempts so the target firmware is offered again at the next wake
+	// (POST /devices/{id}/ota/retry)
+	RetryDeviceOTA(w http.ResponseWriter, r *http.Request, id DeviceID)
 	// SetDevicePlaylist Assign a playlist (or none) and restart the rotation
 	// (PUT /devices/{id}/playlist)
 	SetDevicePlaylist(w http.ResponseWriter, r *http.Request, id DeviceID)
 	// ListDeviceTelemetry Telemetry history, newest first
 	// (GET /devices/{id}/telemetry)
 	ListDeviceTelemetry(w http.ResponseWriter, r *http.Request, id DeviceID, params ListDeviceTelemetryParams)
+
+	// (GET /firmware)
+	ListFirmware(w http.ResponseWriter, r *http.Request)
+	// UploadFirmware Upload an app image (.bin); it is checked before it can be offered
+	// (POST /firmware)
+	UploadFirmware(w http.ResponseWriter, r *http.Request)
+	// DeleteFirmware Delete a firmware image; models using it as target get none
+	// (DELETE /firmware/{id})
+	DeleteFirmware(w http.ResponseWriter, r *http.Request, id FirmwareID)
+
+	// (PATCH /firmware/{id})
+	UpdateFirmware(w http.ResponseWriter, r *http.Request, id FirmwareID)
 	// GetHealth Liveness and dependency status
 	// (GET /health)
 	GetHealth(w http.ResponseWriter, r *http.Request)
@@ -1662,6 +1833,32 @@ func (siw *ServerInterfaceWrapper) ListDeviceModels(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// SetModelFirmware operation middleware
+func (siw *ServerInterfaceWrapper) SetModelFirmware(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ModelID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetModelFirmware(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // SetToneCurve operation middleware
 func (siw *ServerInterfaceWrapper) SetToneCurve(w http.ResponseWriter, r *http.Request) {
 
@@ -2004,6 +2201,32 @@ func (siw *ServerInterfaceWrapper) ListDeviceLogs(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// RetryDeviceOTA operation middleware
+func (siw *ServerInterfaceWrapper) RetryDeviceOTA(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id DeviceID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RetryDeviceOTA(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // SetDevicePlaylist operation middleware
 func (siw *ServerInterfaceWrapper) SetDevicePlaylist(w http.ResponseWriter, r *http.Request) {
 
@@ -2076,6 +2299,86 @@ func (siw *ServerInterfaceWrapper) ListDeviceTelemetry(w http.ResponseWriter, r 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListDeviceTelemetry(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListFirmware operation middleware
+func (siw *ServerInterfaceWrapper) ListFirmware(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListFirmware(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UploadFirmware operation middleware
+func (siw *ServerInterfaceWrapper) UploadFirmware(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UploadFirmware(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteFirmware operation middleware
+func (siw *ServerInterfaceWrapper) DeleteFirmware(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id FirmwareID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteFirmware(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateFirmware operation middleware
+func (siw *ServerInterfaceWrapper) UpdateFirmware(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id FirmwareID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateFirmware(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2756,6 +3059,12 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/devices/{id}/playlist", wrapper.SetDevicePlaylist)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/devices/{id}/calibration", wrapper.StopDeviceCalibration)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/devices/{id}/calibration", wrapper.StartDeviceCalibration)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/device-models/{id}/firmware", wrapper.SetModelFirmware)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/firmware", wrapper.ListFirmware)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/firmware", wrapper.UploadFirmware)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/firmware/{id}", wrapper.DeleteFirmware)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/firmware/{id}", wrapper.UpdateFirmware)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/devices/{id}/ota/retry", wrapper.RetryDeviceOTA)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/device-models/{id}/tone-curve", wrapper.SetToneCurve)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/device-models/{id}/tone-curve/preview", wrapper.PreviewToneCurve)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/screens", wrapper.ListScreens)
@@ -2804,6 +3113,8 @@ type ComponentJSONResponse Component
 type ConnectorJSONResponse Connector
 
 type DeviceJSONResponse Device
+
+type FirmwareJSONResponse Firmware
 
 type PlaylistJSONResponse Playlist
 
@@ -3507,6 +3818,59 @@ func (response ListDeviceModels200JSONResponse) VisitListDeviceModelsResponse(w 
 	return err
 }
 
+type SetModelFirmwareRequestObject struct {
+	Id   ModelID `json:"id"`
+	Body *SetModelFirmwareJSONRequestBody
+}
+
+type SetModelFirmwareResponseObject interface {
+	VisitSetModelFirmwareResponse(w http.ResponseWriter) error
+}
+
+type SetModelFirmware200JSONResponse DeviceModel
+
+func (response SetModelFirmware200JSONResponse) VisitSetModelFirmwareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetModelFirmware404ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response SetModelFirmware404ApplicationProblemPlusJSONResponse) VisitSetModelFirmwareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetModelFirmware422ApplicationProblemPlusJSONResponse Problem
+
+func (response SetModelFirmware422ApplicationProblemPlusJSONResponse) VisitSetModelFirmwareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type SetToneCurveRequestObject struct {
 	Id   ModelID `json:"id"`
 	Body *SetToneCurveJSONRequestBody
@@ -3990,6 +4354,44 @@ func (response ListDeviceLogs404ApplicationProblemPlusJSONResponse) VisitListDev
 	return err
 }
 
+type RetryDeviceOTARequestObject struct {
+	Id DeviceID `json:"id"`
+}
+
+type RetryDeviceOTAResponseObject interface {
+	VisitRetryDeviceOTAResponse(w http.ResponseWriter) error
+}
+
+type RetryDeviceOTA200JSONResponse struct{ DeviceJSONResponse }
+
+func (response RetryDeviceOTA200JSONResponse) VisitRetryDeviceOTAResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RetryDeviceOTA404ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response RetryDeviceOTA404ApplicationProblemPlusJSONResponse) VisitRetryDeviceOTAResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type SetDevicePlaylistRequestObject struct {
 	Id   DeviceID `json:"id"`
 	Body *SetDevicePlaylistJSONRequestBody
@@ -4071,6 +4473,136 @@ type ListDeviceTelemetry404ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response ListDeviceTelemetry404ApplicationProblemPlusJSONResponse) VisitListDeviceTelemetryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListFirmwareRequestObject struct {
+}
+
+type ListFirmwareResponseObject interface {
+	VisitListFirmwareResponse(w http.ResponseWriter) error
+}
+
+type ListFirmware200JSONResponse []Firmware
+
+func (response ListFirmware200JSONResponse) VisitListFirmwareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadFirmwareRequestObject struct {
+	Body *multipart.Reader
+}
+
+type UploadFirmwareResponseObject interface {
+	VisitUploadFirmwareResponse(w http.ResponseWriter) error
+}
+
+type UploadFirmware201JSONResponse struct{ FirmwareJSONResponse }
+
+func (response UploadFirmware201JSONResponse) VisitUploadFirmwareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadFirmware422ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response UploadFirmware422ApplicationProblemPlusJSONResponse) VisitUploadFirmwareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteFirmwareRequestObject struct {
+	Id FirmwareID `json:"id"`
+}
+
+type DeleteFirmwareResponseObject interface {
+	VisitDeleteFirmwareResponse(w http.ResponseWriter) error
+}
+
+type DeleteFirmware204Response struct {
+}
+
+func (response DeleteFirmware204Response) VisitDeleteFirmwareResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteFirmware404ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteFirmware404ApplicationProblemPlusJSONResponse) VisitDeleteFirmwareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateFirmwareRequestObject struct {
+	Id   FirmwareID `json:"id"`
+	Body *UpdateFirmwareJSONRequestBody
+}
+
+type UpdateFirmwareResponseObject interface {
+	VisitUpdateFirmwareResponse(w http.ResponseWriter) error
+}
+
+type UpdateFirmware200JSONResponse struct{ FirmwareJSONResponse }
+
+func (response UpdateFirmware200JSONResponse) VisitUpdateFirmwareResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateFirmware404ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateFirmware404ApplicationProblemPlusJSONResponse) VisitUpdateFirmwareResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -5069,6 +5601,9 @@ type StrictServerInterface interface {
 
 	// (GET /device-models)
 	ListDeviceModels(ctx context.Context, request ListDeviceModelsRequestObject) (ListDeviceModelsResponseObject, error)
+	// SetModelFirmware Choose the firmware devices of this model are updated to (null = none)
+	// (PUT /device-models/{id}/firmware)
+	SetModelFirmware(ctx context.Context, request SetModelFirmwareRequestObject) (SetModelFirmwareResponseObject, error)
 	// SetToneCurve Save a model's gray tone curve; its screens re-render
 	// (PUT /device-models/{id}/tone-curve)
 	SetToneCurve(ctx context.Context, request SetToneCurveRequestObject) (SetToneCurveResponseObject, error)
@@ -5102,12 +5637,27 @@ type StrictServerInterface interface {
 	// ListDeviceLogs Device logs, newest first
 	// (GET /devices/{id}/logs)
 	ListDeviceLogs(ctx context.Context, request ListDeviceLogsRequestObject) (ListDeviceLogsResponseObject, error)
+	// RetryDeviceOTA Clear the update attempts so the target firmware is offered again at the next wake
+	// (POST /devices/{id}/ota/retry)
+	RetryDeviceOTA(ctx context.Context, request RetryDeviceOTARequestObject) (RetryDeviceOTAResponseObject, error)
 	// SetDevicePlaylist Assign a playlist (or none) and restart the rotation
 	// (PUT /devices/{id}/playlist)
 	SetDevicePlaylist(ctx context.Context, request SetDevicePlaylistRequestObject) (SetDevicePlaylistResponseObject, error)
 	// ListDeviceTelemetry Telemetry history, newest first
 	// (GET /devices/{id}/telemetry)
 	ListDeviceTelemetry(ctx context.Context, request ListDeviceTelemetryRequestObject) (ListDeviceTelemetryResponseObject, error)
+
+	// (GET /firmware)
+	ListFirmware(ctx context.Context, request ListFirmwareRequestObject) (ListFirmwareResponseObject, error)
+	// UploadFirmware Upload an app image (.bin); it is checked before it can be offered
+	// (POST /firmware)
+	UploadFirmware(ctx context.Context, request UploadFirmwareRequestObject) (UploadFirmwareResponseObject, error)
+	// DeleteFirmware Delete a firmware image; models using it as target get none
+	// (DELETE /firmware/{id})
+	DeleteFirmware(ctx context.Context, request DeleteFirmwareRequestObject) (DeleteFirmwareResponseObject, error)
+
+	// (PATCH /firmware/{id})
+	UpdateFirmware(ctx context.Context, request UpdateFirmwareRequestObject) (UpdateFirmwareResponseObject, error)
 	// GetHealth Liveness and dependency status
 	// (GET /health)
 	GetHealth(ctx context.Context, request GetHealthRequestObject) (GetHealthResponseObject, error)
@@ -5730,6 +6280,39 @@ func (sh *strictHandler) ListDeviceModels(w http.ResponseWriter, r *http.Request
 	}
 }
 
+// SetModelFirmware operation middleware
+func (sh *strictHandler) SetModelFirmware(w http.ResponseWriter, r *http.Request, id ModelID) {
+	var request SetModelFirmwareRequestObject
+
+	request.Id = id
+
+	var body SetModelFirmwareJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetModelFirmware(ctx, request.(SetModelFirmwareRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetModelFirmware")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetModelFirmwareResponseObject); ok {
+		if err := validResponse.VisitSetModelFirmwareResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // SetToneCurve operation middleware
 func (sh *strictHandler) SetToneCurve(w http.ResponseWriter, r *http.Request, id ModelID) {
 	var request SetToneCurveRequestObject
@@ -6036,6 +6619,32 @@ func (sh *strictHandler) ListDeviceLogs(w http.ResponseWriter, r *http.Request, 
 	}
 }
 
+// RetryDeviceOTA operation middleware
+func (sh *strictHandler) RetryDeviceOTA(w http.ResponseWriter, r *http.Request, id DeviceID) {
+	var request RetryDeviceOTARequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RetryDeviceOTA(ctx, request.(RetryDeviceOTARequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RetryDeviceOTA")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RetryDeviceOTAResponseObject); ok {
+		if err := validResponse.VisitRetryDeviceOTAResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // SetDevicePlaylist operation middleware
 func (sh *strictHandler) SetDevicePlaylist(w http.ResponseWriter, r *http.Request, id DeviceID) {
 	var request SetDevicePlaylistRequestObject
@@ -6089,6 +6698,120 @@ func (sh *strictHandler) ListDeviceTelemetry(w http.ResponseWriter, r *http.Requ
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListDeviceTelemetryResponseObject); ok {
 		if err := validResponse.VisitListDeviceTelemetryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListFirmware operation middleware
+func (sh *strictHandler) ListFirmware(w http.ResponseWriter, r *http.Request) {
+	var request ListFirmwareRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListFirmware(ctx, request.(ListFirmwareRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListFirmware")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListFirmwareResponseObject); ok {
+		if err := validResponse.VisitListFirmwareResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UploadFirmware operation middleware
+func (sh *strictHandler) UploadFirmware(w http.ResponseWriter, r *http.Request) {
+	var request UploadFirmwareRequestObject
+
+	if reader, err := r.MultipartReader(); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode multipart body: %w", err))
+		return
+	} else {
+		request.Body = reader
+	}
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UploadFirmware(ctx, request.(UploadFirmwareRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UploadFirmware")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UploadFirmwareResponseObject); ok {
+		if err := validResponse.VisitUploadFirmwareResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteFirmware operation middleware
+func (sh *strictHandler) DeleteFirmware(w http.ResponseWriter, r *http.Request, id FirmwareID) {
+	var request DeleteFirmwareRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteFirmware(ctx, request.(DeleteFirmwareRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteFirmware")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteFirmwareResponseObject); ok {
+		if err := validResponse.VisitDeleteFirmwareResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateFirmware operation middleware
+func (sh *strictHandler) UpdateFirmware(w http.ResponseWriter, r *http.Request, id FirmwareID) {
+	var request UpdateFirmwareRequestObject
+
+	request.Id = id
+
+	var body UpdateFirmwareJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateFirmware(ctx, request.(UpdateFirmwareRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateFirmware")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateFirmwareResponseObject); ok {
+		if err := validResponse.VisitUpdateFirmwareResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -6796,126 +7519,142 @@ func (sh *strictHandler) GetSystem(w http.ResponseWriter, r *http.Request) {
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

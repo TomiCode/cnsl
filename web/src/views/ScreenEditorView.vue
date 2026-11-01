@@ -44,6 +44,7 @@ const languages = ref<Schemas['SystemInfo']['languages']>([])
 const draft = reactive({
   name: '',
   language: '',
+  rotation: 0 as Schemas['Rotation'],
   model_id: 0,
   render_interval: 900,
   head: '',
@@ -68,6 +69,37 @@ const sample = ref(false)
 
 const isImage = computed(() => screen.value?.kind === 'image')
 const model = computed(() => devices.models.find((m) => m.id === draft.model_id))
+// The screen as designed: portrait rotations swap the panel's width and height.
+const canvas = computed(() => {
+  const m = model.value
+  if (!m) return undefined
+  const portrait = draft.rotation === 90 || draft.rotation === 270
+  return { width: portrait ? m.height : m.width, height: portrait ? m.width : m.height }
+})
+const rotations: { value: Schemas['Rotation']; label: string }[] = [
+  { value: 0, label: 'Landscape' },
+  { value: 90, label: 'Portrait (turned left)' },
+  { value: 270, label: 'Portrait (turned right)' },
+  { value: 180, label: 'Landscape (upside down)' },
+]
+
+// Rotating between landscape and portrait re-fits preset layouts and moves free regions inside the new canvas.
+function changeRotation(value: Schemas['Rotation']) {
+  const wasPortrait = draft.rotation === 90 || draft.rotation === 270
+  draft.rotation = value
+  const isPortrait = value === 90 || value === 270
+  if (wasPortrait === isPortrait || !canvas.value) return
+  if (draft.layout === 'free') {
+    for (const r of draft.regions) {
+      r.w = Math.min(r.w, canvas.value.width)
+      r.h = Math.min(r.h, canvas.value.height)
+      r.x = Math.min(r.x, canvas.value.width - r.w)
+      r.y = Math.min(r.y, canvas.value.height - r.h)
+    }
+  } else {
+    changeLayout(draft.layout)
+  }
+}
 const isFree = computed(() => draft.layout === 'free')
 const activeRegion = computed(() => draft.regions.find((r) => r.key === tab.value))
 
@@ -78,6 +110,7 @@ function fromScreen(s: Schemas['Screen']): Draft {
   return {
     name: s.name,
     language: s.language,
+    rotation: s.rotation,
     model_id: s.model_id,
     render_interval: s.render_interval,
     head: s.head,
@@ -93,7 +126,7 @@ const structuralDirty = computed(() => {
   const s = screen.value
   if (!s) return false
   const shape = (d: Draft) =>
-    JSON.stringify([d.layout, d.background, d.model_id, d.regions.map((r) => [r.key, r.transparent, r.x, r.y, r.w, r.h, r.z])])
+    JSON.stringify([d.layout, d.rotation, d.background, d.model_id, d.regions.map((r) => [r.key, r.transparent, r.x, r.y, r.w, r.h, r.z])])
   return shape(draft) !== shape(fromScreen(s))
 })
 
@@ -148,7 +181,7 @@ onBeforeUnmount(unsubscribe)
 // into the remaining slots, create the rest from the slot template.
 function changeLayout(key: string) {
   const layout = layouts.value.find((l) => l.key === key)
-  if (!layout || !model.value) return
+  if (!layout || !canvas.value) return
   if (key === 'free') {
     draft.layout = key
     if (!draft.regions.length) addFreeRegion()
@@ -164,10 +197,10 @@ function changeLayout(key: string) {
     }
     return {
       ...r,
-      x: Math.round(s.x * model.value!.width),
-      y: Math.round(s.y * model.value!.height),
-      w: Math.round(s.w * model.value!.width),
-      h: Math.round(s.h * model.value!.height),
+      x: Math.round(s.x * canvas.value!.width),
+      y: Math.round(s.y * canvas.value!.height),
+      w: Math.round(s.w * canvas.value!.width),
+      h: Math.round(s.h * canvas.value!.height),
       z: 0,
     }
   })
@@ -176,7 +209,7 @@ function changeLayout(key: string) {
 }
 
 function addFreeRegion() {
-  const m = model.value
+  const m = canvas.value
   if (!m) return
   let n = draft.regions.length + 1
   while (draft.regions.some((r) => r.key === `region_${n}`)) n++
@@ -217,6 +250,7 @@ async function save() {
       body: {
         name: draft.name,
         language: draft.language,
+        rotation: draft.rotation,
         model_id: draft.model_id,
         render_interval: draft.render_interval,
         head: draft.head,
@@ -348,6 +382,9 @@ const num = 'w-20 rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm f
       <select v-if="!isImage" :value="draft.layout" :class="input" aria-label="Layout" @change="changeLayout(($event.target as HTMLSelectElement).value)">
         <option v-for="l in layouts" :key="l.key" :value="l.key">{{ l.name }}</option>
       </select>
+      <select :value="draft.rotation" :class="input" aria-label="Orientation" title="How the device hangs" @change="changeRotation(Number(($event.target as HTMLSelectElement).value) as Schemas['Rotation'])">
+        <option v-for="r in rotations" :key="r.value" :value="r.value">{{ r.label }}</option>
+      </select>
       <select v-if="!isImage" v-model="draft.language" :class="input" aria-label="Language" title="Language of dates and labels">
         <option value="">Default language</option>
         <option v-for="l in languages" :key="l.code" :value="l.code">{{ l.name }}</option>
@@ -465,7 +502,7 @@ const num = 'w-20 rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm f
         <!-- Free regions -->
         <div v-else-if="tab === 'regions'" class="min-h-0 flex-1 overflow-y-auto p-4 text-sm">
           <p class="mb-3 text-zinc-500">
-            Free regions are placed by coordinates in device pixels ({{ model?.width }}×{{ model?.height }}). Higher z is drawn on top.
+            Free regions are placed by coordinates in device pixels ({{ canvas?.width }}×{{ canvas?.height }}). Higher z is drawn on top.
           </p>
           <div class="space-y-2">
             <div v-for="(r, i) in draft.regions" :key="r.id ?? `new-${i}`" class="flex flex-wrap items-center gap-2 rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2">
@@ -516,7 +553,7 @@ const num = 'w-20 rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm f
             <input v-model="sample" type="checkbox" @change="runPreview" />
             sample data
           </label>
-          <span v-if="preview" class="ml-auto text-xs text-zinc-400">{{ preview.duration_ms }} ms · {{ model?.width }}×{{ model?.height }}</span>
+          <span v-if="preview" class="ml-auto text-xs text-zinc-400">{{ preview.duration_ms }} ms · {{ canvas?.width }}×{{ canvas?.height }}</span>
         </div>
 
         <div class="p-4" :class="{ 'overflow-auto': zoom === 'actual' }">
@@ -531,13 +568,13 @@ const num = 'w-20 rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm f
               :class="zoom === 'fit' ? 'w-full' : 'max-w-none [image-rendering:pixelated]'"
             />
             <!-- Outline free regions to help placing them -->
-            <template v-if="isFree && model">
+            <template v-if="isFree && canvas">
               <div
                 v-for="r in draft.regions"
                 :key="r.key"
                 class="pointer-events-none absolute border-2 border-dashed"
                 :class="r.key === tab ? 'border-sky-500' : 'border-sky-300/70'"
-                :style="{ left: `${(r.x / model.width) * 100}%`, top: `${(r.y / model.height) * 100}%`, width: `${(r.w / model.width) * 100}%`, height: `${(r.h / model.height) * 100}%` }"
+                :style="{ left: `${(r.x / canvas.width) * 100}%`, top: `${(r.y / canvas.height) * 100}%`, width: `${(r.w / canvas.width) * 100}%`, height: `${(r.h / canvas.height) * 100}%` }"
               >
                 <span class="bg-sky-500 px-1 text-[10px] text-white">{{ r.key }}</span>
               </div>

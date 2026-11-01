@@ -64,6 +64,10 @@ export const useDevicesStore = defineStore('devices', () => {
     return replace(unwrap(await api.PATCH('/devices/{id}', { params: { path: { id } }, body })))
   }
 
+  async function retryOTA(id: number) {
+    return replace(unwrap(await api.POST('/devices/{id}/ota/retry', { params: { path: { id } } })))
+  }
+
   async function approve(id: number) {
     return replace(unwrap(await api.POST('/devices/{id}/approve', { params: { path: { id } } })))
   }
@@ -123,6 +127,7 @@ export const useDevicesStore = defineStore('devices', () => {
     byId,
     modelOf,
     refreshOne,
+    retryOTA,
     update,
     approve,
     disable,

@@ -35,6 +35,7 @@ type Options struct {
 	Renderer        *render.Renderer
 	Scheduler       *render.Scheduler
 	UploadsDir      string
+	FirmwareDir     string
 	Connectors      *connector.Service
 }
 
@@ -48,6 +49,7 @@ type Server struct {
 	renderer        *render.Renderer
 	scheduler       *render.Scheduler
 	uploadsDir      string
+	firmwareDir     string
 	connectors      *connector.Service
 }
 
@@ -64,6 +66,7 @@ func NewServer(opts Options) *Server {
 		renderer:        opts.Renderer,
 		scheduler:       opts.Scheduler,
 		uploadsDir:      opts.UploadsDir,
+		firmwareDir:     opts.FirmwareDir,
 		connectors:      opts.Connectors,
 	}
 }

@@ -30,6 +30,7 @@ func toDevice(d store.Device, latest *store.Telemetry) gen.Device {
 		ApprovedAt:       d.ApprovedAt.Ptr(),
 		CreatedAt:        d.CreatedAt.Time,
 		UpdatedAt:        d.UpdatedAt.Time,
+		AutoUpdate:       &d.AutoUpdate,
 	}
 	if latest != nil {
 		t := toTelemetry(*latest)
@@ -48,6 +49,8 @@ func toDeviceModel(m store.DeviceModel) gen.DeviceModel {
 		Height:        m.Height,
 		BitDepth:      gen.DeviceModelBitDepth(m.BitDepth),
 		ToneCurve:     toToneCurve(m.ToneCurve),
+		Chip:          &m.Chip,
+		FirmwareId:    nullInt64(m.FirmwareID),
 	}
 }
 

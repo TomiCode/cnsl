@@ -15,8 +15,9 @@ import (
 )
 
 type Options struct {
-	Devices   *device.Service
-	ImagesDir string
+	Devices     *device.Service
+	ImagesDir   string
+	FirmwareDir string // OTA images, served at /firmware/<sha256>.bin
 	// PublicURL is the base URL devices use to reach this listener; image_url is built from it.
 	PublicURL string
 	Log       *slog.Logger
@@ -35,6 +36,9 @@ func Handler(opts Options) http.Handler {
 
 	images := http.StripPrefix("/images/", http.FileServer(http.Dir(opts.ImagesDir)))
 	mux.Handle("GET /images/", immutable(images))
+	if opts.FirmwareDir != "" {
+		mux.Handle("GET /firmware/", immutable(http.StripPrefix("/firmware/", http.FileServer(http.Dir(opts.FirmwareDir)))))
+	}
 	return mux
 }
 
@@ -78,14 +82,18 @@ func (h *handler) display(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	firmwareURL := ""
+	if res.Firmware != "" {
+		firmwareURL = h.PublicURL + "/firmware/" + res.Firmware
+	}
 	writeJSON(w, map[string]any{
 		"status":                0,
 		"filename":              res.Filename,
 		"image_url":             h.PublicURL + "/images/" + res.Filename,
 		"image_url_timeout":     0,
 		"refresh_rate":          res.RefreshRate,
-		"update_firmware":       false,
-		"firmware_url":          "",
+		"update_firmware":       firmwareURL != "",
+		"firmware_url":          firmwareURL,
 		"reset_firmware":        false,
 		"special_function":      "none",
 		"temperature_profile":   "default",

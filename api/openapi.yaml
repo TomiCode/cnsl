@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: cnsl dashboard API
-  version: 0.8.0
+  version: 0.9.0
   description: |
     API used by the cnsl web dashboard. Device (firmware) endpoints are not part of this spec;
     they are served on the separate device listener (and mirrored under /device on the
@@ -16,6 +16,8 @@ tags:
   - name: playlists
   - name: assets
   - name: connectors
+  - name: firmware
+    description: Firmware images and over-the-air updates.
   - name: library
     description: Components and editor snippets.
   - name: stream
@@ -304,6 +306,119 @@ paths:
     delete:
       operationId: stopDeviceCalibration
       tags: [devices]
+      responses:
+        "200":
+          $ref: "#/components/responses/Device"
+        "404":
+          $ref: "#/components/responses/Problem"
+
+  /device-models/{id}/firmware:
+    parameters:
+      - $ref: "#/components/parameters/ModelID"
+    put:
+      operationId: setModelFirmware
+      summary: Choose the firmware devices of this model are updated to (null = none)
+      tags: [firmware]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [firmware_id]
+              properties:
+                firmware_id: { type: integer, format: int64, nullable: true }
+      responses:
+        "200":
+          description: The model
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceModel"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+
+  /firmware:
+    get:
+      operationId: listFirmware
+      tags: [firmware]
+      responses:
+        "200":
+          description: Uploaded firmware images, newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Firmware"
+    post:
+      operationId: uploadFirmware
+      summary: Upload an app image (.bin); it is checked before it can be offered
+      tags: [firmware]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                version:
+                  type: string
+                  description: |
+                    The version devices report (FW-Version) after installing it. Guessed from the
+                    file name or the image when omitted.
+                notes:
+                  type: string
+      responses:
+        "201":
+          $ref: "#/components/responses/Firmware"
+        "422":
+          $ref: "#/components/responses/Problem"
+
+  /firmware/{id}:
+    parameters:
+      - $ref: "#/components/parameters/FirmwareID"
+    patch:
+      operationId: updateFirmware
+      tags: [firmware]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version]
+              properties:
+                version: { type: string, minLength: 1, maxLength: 40 }
+                notes: { type: string, maxLength: 1000 }
+      responses:
+        "200":
+          $ref: "#/components/responses/Firmware"
+        "404":
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: deleteFirmware
+      summary: Delete a firmware image; models using it as target get none
+      tags: [firmware]
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          $ref: "#/components/responses/Problem"
+
+  /devices/{id}/ota/retry:
+    parameters:
+      - $ref: "#/components/parameters/DeviceID"
+    post:
+      operationId: retryDeviceOTA
+      summary: Clear the update attempts so the target firmware is offered again at the next wake
+      tags: [firmware]
       responses:
         "200":
           $ref: "#/components/responses/Device"
@@ -1023,6 +1138,11 @@ components:
       in: path
       required: true
       schema: { type: integer, format: int64 }
+    FirmwareID:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer, format: int64 }
     ComponentID:
       name: id
       in: path
@@ -1068,6 +1188,12 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/Connector"
+    Firmware:
+      description: The firmware
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Firmware"
     Component:
       description: The component
       content:
@@ -1168,6 +1294,14 @@ components:
         bit_depth: { type: integer, enum: [1, 2, 4] }
         tone_curve:
           $ref: "#/components/schemas/ToneCurve"
+        chip:
+          type: string
+          description: Chip the model's firmware is built for (esp32s3, …); empty = no updates.
+        firmware_id:
+          type: integer
+          format: int64
+          nullable: true
+          description: Firmware devices of this model are updated to (when they opt in).
 
     DeviceStatus:
       type: string
@@ -1206,10 +1340,54 @@ components:
         updated_at: { type: string, format: date-time }
         latest:
           $ref: "#/components/schemas/Telemetry"
+        auto_update:
+          type: boolean
+          description: Install the model's target firmware over the air.
+        ota:
+          $ref: "#/components/schemas/OTAStatus"
+
+    OTAStatus:
+      type: object
+      required: [state]
+      properties:
+        state:
+          type: string
+          enum: [off, no_target, current, due, pending, gave_up]
+          description: |
+            off = auto-update disabled; no_target = the model has no target firmware;
+            current = runs the target; due = offered at the next wake; pending = offered, waiting
+            for the device to report the new version; gave_up = offered 3 times without success.
+        target_version: { type: string }
+        target_id: { type: integer, format: int64 }
+        attempts: { type: integer }
+        offered_at: { type: string, format: date-time }
+
+    Firmware:
+      type: object
+      required: [id, version, chip, project, built, idf, size, sha256, filename, notes, created_at, model_ids]
+      properties:
+        id: { type: integer, format: int64 }
+        version:
+          type: string
+          description: What devices report after installing it.
+        chip: { type: string, example: esp32s3 }
+        project: { type: string }
+        built: { type: string }
+        idf: { type: string }
+        size: { type: integer, format: int64 }
+        sha256: { type: string }
+        filename: { type: string }
+        notes: { type: string }
+        created_at: { type: string, format: date-time }
+        model_ids:
+          type: array
+          description: Models that use it as their target.
+          items: { type: integer, format: int64 }
 
     DeviceUpdate:
       type: object
       properties:
+        auto_update: { type: boolean }
         label: { type: string, maxLength: 100 }
         model_id: { type: integer, format: int64 }
         refresh_rate: { type: integer, minimum: 30, maximum: 86400 }
@@ -1394,9 +1572,11 @@ components:
       allOf:
         - $ref: "#/components/schemas/ScreenSummary"
         - type: object
-          required: [framework_version, head, regions, background, language]
+          required: [framework_version, head, regions, background, language, rotation]
           properties:
             framework_version: { type: string }
+            rotation:
+              $ref: "#/components/schemas/Rotation"
             language:
               type: string
               description: Language override; empty uses the global setting.
@@ -1431,6 +1611,8 @@ components:
           type: string
           maxLength: 10
           description: Language code from /system languages; empty uses the global setting.
+        rotation:
+          $ref: "#/components/schemas/Rotation"
         layout:
           type: string
           description: A layout key from /system layouts. Changing it adds or removes regions.
@@ -1570,6 +1752,14 @@ components:
         height: { type: integer }
         size: { type: integer, format: int64 }
         created_at: { type: string, format: date-time }
+
+    Rotation:
+      type: integer
+      enum: [0, 90, 180, 270]
+      description: |
+        Clockwise degrees from the screen as designed to the panel. 0 = landscape, 90 = portrait
+        with the device turned left (counter-clockwise), 180 = upside down, 270 = portrait with
+        the device turned right. Portrait screens are designed at swapped width and height.
 
     Settings:
       type: object

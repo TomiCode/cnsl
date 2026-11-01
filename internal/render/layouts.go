@@ -74,6 +74,19 @@ const slotTemplate = `<div class="layout layout--col layout--center">
 const FreeTemplate = `<span class="value value--large value--tnums">{{ date "15:04" .Now }}</span>
 `
 
+// Oriented returns the model as a screen with this rotation sees it: width and height swap for
+// portrait (90/270), and the framework gets its portrait modifier.
+func Oriented(m store.DeviceModel, rotation int) store.DeviceModel {
+	if rotation == 90 || rotation == 270 {
+		m.Width, m.Height = m.Height, m.Width
+		m.ScreenClasses = strings.TrimSpace(m.ScreenClasses + " screen--portrait")
+	}
+	return m
+}
+
+// ValidRotation reports whether a screen rotation is supported.
+func ValidRotation(r int) bool { return r == 0 || r == 90 || r == 180 || r == 270 }
+
 // ApplyLayout returns the regions a screen should have for a preset layout. Regions whose key
 // matches a slot keep their template; when switching between presets, templates of regions that
 // don't fit any slot are moved into the remaining new slots in order, so no work is lost.
