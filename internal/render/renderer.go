@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"image"
@@ -69,6 +70,8 @@ type Request struct {
 	Head      *string
 	Trigger   string
 	Sample    bool // use connector sample data instead of real data
+	// Locate returns where blocks and template lines ended up (editor previews).
+	Locate bool
 }
 
 type Result struct {
@@ -82,6 +85,7 @@ type Result struct {
 	// stale or missing data).
 	DataErrors map[string]string
 	Duration   time.Duration
+	Boxes      []Box // with Request.Locate
 }
 
 // Render runs the pipeline without storing anything.
@@ -107,6 +111,11 @@ func (r *Renderer) Render(ctx context.Context, req Request) (Result, error) {
 		}
 		if a, ok := req.Arrange[regions[i].Key]; ok {
 			regions[i].Arrange = a.JSON()
+		}
+		// Mark HTML templates' lines for locating (block templates are marked per block). Templates
+		// that don't parse are left alone so their errors point at the user's own text.
+		if req.Locate && !strings.Contains(regions[i].Template, "data-cnsl-block=") && tmpl.Check(regions[i].Key, regions[i].Template) == nil {
+			regions[i].Template = annotateLines(regions[i].Template)
 		}
 	}
 	if req.Head != nil {
@@ -184,7 +193,7 @@ func (r *Renderer) Render(ctx context.Context, req Request) (Result, error) {
 		Data:   map[string]any{},
 		Stale:  map[string]bool{},
 	})
-	res, err := r.renderHTML(ctx, html, model)
+	res, err := r.renderPage(ctx, html, model, req.Locate)
 	if err != nil {
 		return Result{}, err
 	}
@@ -307,12 +316,27 @@ func (r *Renderer) prune(ctx context.Context, screenID int64) {
 
 // renderHTML screenshots a page for a model and converts it to the model's gray levels.
 func (r *Renderer) renderHTML(ctx context.Context, html string, model store.DeviceModel) (Result, error) {
+	return r.renderPage(ctx, html, model, false)
+}
+
+// renderPage renders like renderHTML and, with locate, collects the boxes of blocks and lines.
+func (r *Renderer) renderPage(ctx context.Context, html string, model store.DeviceModel, locate bool) (Result, error) {
 	// The viewport is the panel in device pixels at a device pixel ratio of 1: the framework
 	// scales .screen up itself (transform: scale(var(--pixel-ratio)), 1.8 on TRMNL X).
 	token := r.pages.put(html)
-	raw, err := r.browser.Screenshot(ctx, pageURL(r.baseURL, token), model.Width, model.Height, 1)
+	script := ""
+	if locate {
+		script = locateScript
+	}
+	raw, located, err := r.browser.Capture(ctx, pageURL(r.baseURL, token), model.Width, model.Height, 1, script)
 	if err != nil {
 		return Result{}, err
+	}
+	var boxes []Box
+	if located != "" {
+		if err := json.Unmarshal([]byte(located), &boxes); err != nil {
+			r.log.WarnContext(ctx, "locate boxes", "err", err)
+		}
 	}
 	img, err := png.Decode(bytes.NewReader(raw))
 	if err != nil {
@@ -332,5 +356,6 @@ func (r *Renderer) renderHTML(ctx context.Context, html string, model store.Devi
 	levels := imaging.QuantizeTo(curve.Apply(gray), pal, imaging.DitherNone)
 	res, err := finish(levels, model.BitDepth, pal)
 	res.Raw = raw
+	res.Boxes = boxes
 	return res, err
 }

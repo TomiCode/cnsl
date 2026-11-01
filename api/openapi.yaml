@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: cnsl dashboard API
-  version: 0.11.0
+  version: 0.12.0
   description: |
     API used by the cnsl web dashboard. Device (firmware) endpoints are not part of this spec;
     they are served on the separate device listener (and mirrored under /device on the
@@ -1760,6 +1760,25 @@ components:
           description: Connector problems by binding alias.
           additionalProperties: { type: string }
         duration_ms: { type: integer, format: int64 }
+        boxes:
+          type: array
+          description: |
+            Where regions, blocks and template lines ended up, in device pixels of the screen as
+            designed (screen previews only). The editor maps clicks on the preview with them.
+          items:
+            $ref: "#/components/schemas/LocateBox"
+
+    LocateBox:
+      type: object
+      required: [region, x, y, w, h]
+      properties:
+        region: { type: string }
+        block: { type: integer }
+        line: { type: integer }
+        x: { type: number }
+        y: { type: number }
+        w: { type: number }
+        h: { type: number }
 
     TemplateProblem:
       allOf:

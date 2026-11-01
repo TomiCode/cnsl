@@ -472,7 +472,7 @@ func (s *Server) DeleteScreen(ctx context.Context, req gen.DeleteScreenRequestOb
 }
 
 func (s *Server) PreviewScreen(ctx context.Context, req gen.PreviewScreenRequestObject) (gen.PreviewScreenResponseObject, error) {
-	rreq := render.Request{ScreenID: req.Id, Trigger: "preview"}
+	rreq := render.Request{ScreenID: req.Id, Trigger: "preview", Locate: true}
 	if req.Body != nil {
 		rreq.Sample = req.Body.Sample != nil && *req.Body.Sample
 		if req.Body.Templates != nil {
@@ -566,6 +566,13 @@ func toPreview(res render.Result) gen.Preview {
 	if len(res.DataErrors) > 0 {
 		de := res.DataErrors
 		p.DataErrors = &de
+	}
+	if len(res.Boxes) > 0 {
+		boxes := make([]gen.LocateBox, len(res.Boxes))
+		for i, b := range res.Boxes {
+			boxes[i] = gen.LocateBox{Region: b.Region, Block: b.Block, Line: b.Line, X: float32(b.X), Y: float32(b.Y), W: float32(b.W), H: float32(b.H)}
+		}
+		p.Boxes = &boxes
 	}
 	return p
 }

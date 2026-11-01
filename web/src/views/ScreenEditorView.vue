@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, Blocks, CircleAlert, CircleCheck, Eye, Loader2, Play, Plus, Save, Trash2, X } from 'lucide-vue-next'
 import CodeEditor from '@/components/CodeEditor.vue'
@@ -71,6 +71,7 @@ const draft = reactive({
 type Draft = typeof draft
 const tab = ref('')
 const editor = ref<InstanceType<typeof CodeEditor> | null>(null)
+const blockEditor = ref<InstanceType<typeof BlockEditor> | null>(null)
 
 const preview = ref<Schemas['Preview'] | null>(null)
 const previewMode = ref<'device' | 'raw'>('device')
@@ -364,6 +365,30 @@ async function dataArgs(c: Component, regionKey: string): Promise<Record<string,
   return args
 }
 
+// Click on the preview → the block or template line that produced it (boxes come with previews,
+// in device pixels of the screen as designed, like the preview image).
+async function locate(e: MouseEvent) {
+  const boxes = preview.value?.boxes
+  const img = e.currentTarget as HTMLImageElement
+  if (!boxes?.length || !img.naturalWidth) return
+  const x = (e.offsetX / img.clientWidth) * img.naturalWidth
+  const y = (e.offsetY / img.clientHeight) * img.naturalHeight
+  const hits = boxes.filter((b) => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h)
+  if (!hits.length) return
+  const specific = hits.filter((b) => b.block != null || b.line != null)
+  const pick = (specific.length ? specific : hits).reduce((a, b) => (b.w * b.h < a.w * a.h ? b : a))
+  tab.value = pick.region
+  await nextTick()
+  const region = draft.regions.find((r) => r.key === pick.region)
+  if (pick.block != null && region?.blocks) {
+    highlightBlock.value = pick.block
+    blockEditor.value?.scrollTo(pick.block)
+  } else if (pick.line != null && !region?.blocks) {
+    const line = pick.line
+    setTimeout(() => editor.value?.revealLine(line)) // the editor mounts after a tab switch
+  }
+}
+
 // Blocks: add, switch modes, preview while editing.
 async function addBlock(c: Component | null) {
   const region = activeRegion.value
@@ -607,6 +632,7 @@ const num = 'w-20 rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm f
           </div>
           <div v-if="activeRegion.blocks" class="min-h-0 flex-1 overflow-y-auto bg-zinc-50">
             <BlockEditor
+              ref="blockEditor"
               v-model="activeRegion.blocks"
               :components="library.components"
               :data-paths="paths"
@@ -715,7 +741,9 @@ const num = 'w-20 rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm f
               :src="previewMode === 'device' ? (preview.panel ?? preview.device) : preview.raw"
               alt="Screen preview"
               class="border border-zinc-300 bg-white shadow-sm"
-              :class="zoom === 'fit' ? 'w-full' : 'max-w-none [image-rendering:pixelated]'"
+              :class="[zoom === 'fit' ? 'w-full' : 'max-w-none [image-rendering:pixelated]', preview.boxes?.length ? 'cursor-crosshair' : '']"
+              :title="preview.boxes?.length ? 'Click to find this in the editor' : undefined"
+              @click="locate"
             />
             <!-- Outline free regions to help placing them -->
             <template v-if="isFree && canvas">

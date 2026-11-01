@@ -1167,6 +1167,20 @@ export interface components {
             };
             /** Format: int64 */
             duration_ms: number;
+            /**
+             * @description Where regions, blocks and template lines ended up, in device pixels of the screen as
+             *     designed (screen previews only). The editor maps clicks on the preview with them.
+             */
+            boxes?: components["schemas"]["LocateBox"][];
+        };
+        LocateBox: {
+            region: string;
+            block?: number;
+            line?: number;
+            x: number;
+            y: number;
+            w: number;
+            h: number;
         };
         TemplateProblem: components["schemas"]["Problem"] & {
             template_errors?: components["schemas"]["TemplateError"][];

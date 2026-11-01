@@ -68,16 +68,23 @@ func (b *Browser) context() (context.Context, error) {
 // Screenshot loads url in a viewport of cssW×cssH CSS pixels at the given device pixel ratio
 // and returns a PNG of the viewport (cssW·scale × cssH·scale pixels).
 func (b *Browser) Screenshot(ctx context.Context, url string, cssW, cssH int, scale float64) ([]byte, error) {
+	png, _, err := b.Capture(ctx, url, cssW, cssH, scale, "")
+	return png, err
+}
+
+// Capture takes a screenshot like Screenshot and, when script is set, also evaluates it on the
+// laid-out page and returns its (string) result.
+func (b *Browser) Capture(ctx context.Context, url string, cssW, cssH int, scale float64, script string) ([]byte, string, error) {
 	select {
 	case b.sem <- struct{}{}:
 		defer func() { <-b.sem }()
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return nil, "", ctx.Err()
 	}
 
 	browser, err := b.context()
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	tab, closeTab := chromedp.NewContext(browser)
 	defer closeTab()
@@ -91,17 +98,23 @@ func (b *Browser) Screenshot(ctx context.Context, url string, cssW, cssH int, sc
 		chromedp.Navigate(url),
 		waitReady(),
 	)
-	var png []byte
+	var (
+		png []byte
+		out string
+	)
+	if err == nil && script != "" {
+		out, err = chromedp.Run(tab, chromedp.Evaluate[string](script))
+	}
 	if err == nil {
 		png, err = chromedp.Run(tab, chromedp.CaptureScreenshot())
 	}
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
-			return nil, fmt.Errorf("render timed out: %w", err)
+			return nil, "", fmt.Errorf("render timed out: %w", err)
 		}
-		return nil, err
+		return nil, "", err
 	}
-	return png, nil
+	return png, out, nil
 }
 
 // waitReady waits for fonts and for the framework runtime (terminalize) to finish layout.
