@@ -123,6 +123,7 @@ func (r *Renderer) assetLevels(ctx context.Context, assetID int64, model store.D
 		defer f.Close()
 		if img, err := png.Decode(f); err == nil {
 			if g, ok := img.(*image.Gray); ok {
+				touch(cached) // keeps it from being cleaned up while in use
 				return g, nil
 			}
 		}

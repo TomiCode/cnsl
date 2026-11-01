@@ -24,6 +24,7 @@ import (
 	"github.com/TomiCode/cnsl/internal/httpx"
 	"github.com/TomiCode/cnsl/internal/imaging"
 	"github.com/TomiCode/cnsl/internal/render"
+	"github.com/TomiCode/cnsl/internal/secret"
 	"github.com/TomiCode/cnsl/internal/store"
 	"github.com/TomiCode/cnsl/web"
 )
@@ -66,7 +67,17 @@ func run() error {
 	files := imaging.Files{Dir: cfg.ImagesDir()}
 	devices := device.NewService(st, broker, files, cfg.Timezone, logger)
 
-	connectors := connector.NewService(st, logger)
+	box, keySource, err := secret.Load(cfg.SecretKey, cfg.DataDir)
+	if err != nil {
+		return err
+	}
+	logger.Info("secret key loaded", "source", keySource)
+	connectors := connector.NewService(st, logger, box)
+	if n, err := connectors.EncryptStored(ctx); err != nil {
+		return fmt.Errorf("encrypt stored secrets: %w", err)
+	} else if n > 0 {
+		logger.Info("encrypted connector secrets stored in plaintext", "connectors", n)
+	}
 
 	browser := render.NewBrowser(cfg.ChromeURL, 2, logger)
 	defer browser.Close()
@@ -85,6 +96,7 @@ func run() error {
 	scheduler := render.NewScheduler(renderer, st, broker, logger)
 	devices.SetScreens(scheduler)
 	go scheduler.Run(ctx)
+	go renderer.RunCleanup(ctx, 6*time.Hour)
 	connectors.OnChange = func(screenIDs []int64) {
 		for _, id := range screenIDs {
 			scheduler.Request(id, "data")

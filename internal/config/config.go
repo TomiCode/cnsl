@@ -21,6 +21,7 @@ type Config struct {
 	Timezone        *time.Location
 	LogLevel        slog.Level
 	LogFormat       string // "text" or "json"
+	SecretKey       string // base64 AES-256 key for secrets at rest; empty = <data>/secret.key
 }
 
 // DatabasePath is the SQLite file inside the data directory.
@@ -52,6 +53,7 @@ func Load() (Config, error) {
 		ChromeURL:       env("CNSL_CHROME_URL", ""),
 		RenderBaseURL:   strings.TrimRight(env("CNSL_RENDER_BASE_URL", ""), "/"),
 		LogFormat:       env("CNSL_LOG_FORMAT", "text"),
+		SecretKey:       env("CNSL_SECRET_KEY", ""),
 	}
 
 	// Without CNSL_TIMEZONE or TZ use the system zone (UTC in containers unless TZ is set).

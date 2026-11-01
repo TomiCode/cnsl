@@ -10,10 +10,12 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/TomiCode/cnsl/internal/secret"
 	"github.com/TomiCode/cnsl/internal/store"
 )
 
@@ -120,7 +122,8 @@ func TestServiceCacheAndStale(t *testing.T) {
 	srv := fakeHA(t, &fail)
 	defer srv.Close()
 
-	svc := NewService(st, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	box, _ := secret.New(make([]byte, 32))
+	svc := NewService(st, slog.New(slog.NewTextHandler(io.Discard, nil)), box)
 	svc.env.HTTP = srv.Client()
 
 	model, _ := st.DeviceModelByFirmware(ctx, "virtual")
@@ -136,6 +139,18 @@ func TestServiceCacheAndStale(t *testing.T) {
 		RegionKey: sql.NullString{}}
 	if err := st.ReplaceBindings(ctx, sc.ID, []store.Binding{b}); err != nil {
 		t.Fatal(err)
+	}
+
+	// The token was stored in plaintext (as before encryption existed): startup seals it.
+	if n, err := svc.EncryptStored(ctx); err != nil || n != 1 {
+		t.Fatalf("encrypt stored: %d %v", n, err)
+	}
+	stored, _ := st.Connector(ctx, conn.ID)
+	if strings.Contains(stored.Config, "secret-token") || !strings.Contains(stored.Config, "enc:v1:") {
+		t.Fatalf("token not sealed at rest: %s", stored.Config)
+	}
+	if n, _ := svc.EncryptStored(ctx); n != 0 {
+		t.Fatal("second run must not change anything")
 	}
 
 	res, err := svc.Resolve(ctx, sc.ID, "main", false)

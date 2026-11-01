@@ -12,6 +12,8 @@ services:
       CNSL_CHROME_URL: http://chrome:9222
       CNSL_RENDER_BASE_URL: http://cnsl:8080
       TZ: Etc/UTC # your household timezone, e.g. Europe/Vienna
+      # Encrypts connector tokens at rest. Without it a key is generated inside the data volume.
+      # CNSL_SECRET_KEY: "<output of: openssl rand -base64 32>"
     volumes:
       - cnsl-data:/data
     depends_on:

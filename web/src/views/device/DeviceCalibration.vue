@@ -111,15 +111,16 @@ const sliders = [
 
 <template>
   <div v-if="!model" class="text-sm text-zinc-500">Assign a model to this device first.</div>
-  <div v-else class="space-y-6">
-    <div class="grid gap-6 lg:grid-cols-2">
-      <div class="rounded-lg border border-zinc-200 bg-white p-4 text-sm">
-        <div class="mb-1 font-medium">1. Show the pattern on the device</div>
+  <div v-else class="grid items-start gap-6 lg:grid-cols-2">
+    <!-- Steps -->
+    <div class="min-w-0 space-y-6">
+      <section class="rounded-lg border border-zinc-200 bg-white p-4 text-sm">
+        <h3 class="mb-1 font-medium">1. Show the pattern on the device</h3>
         <p class="mb-3 text-xs text-zinc-500">
-          The device shows the calibration pattern instead of its playlist and wakes every minute, for 30 minutes. Press its button to wake it
-          right away. After saving, the pattern updates on the next wake.
+          The device shows the calibration pattern instead of its playlist and wakes every minute, for 30 minutes. Press its button to wake
+          it right away. After saving, the pattern updates on the next wake.
         </p>
-        <div class="flex items-center gap-3">
+        <div class="flex flex-wrap items-center gap-3">
           <button
             v-if="!calibrating"
             type="button"
@@ -143,78 +144,93 @@ const sliders = [
           <span v-if="calibrating" class="text-xs text-emerald-700">on · {{ remaining }} min left</span>
           <span v-else-if="device.status !== 'active'" class="text-xs text-zinc-400">device must be active</span>
         </div>
-      </div>
+      </section>
 
-      <div class="rounded-lg border border-zinc-200 bg-white p-4 text-sm">
-        <div class="mb-1 font-medium">3. Overall contrast (optional)</div>
-        <p class="mb-3 text-xs text-zinc-500">Applied to every image before the levels; affects all screens of {{ model.name }}.</p>
-        <div v-for="s in sliders" :key="s.key" class="mb-3">
-          <div class="mb-1 flex justify-between">
-            <label :for="`curve-${s.key}`" class="text-zinc-600">{{ s.label }}</label>
-            <span class="font-mono text-xs">{{ curve[s.key].toFixed(2) }}</span>
+      <section class="rounded-lg border border-zinc-200 bg-white p-4 text-sm">
+        <div class="mb-1 flex flex-wrap items-center justify-between gap-2">
+          <h3 class="font-medium">2. Measure the {{ levelCount }} gray levels</h3>
+          <label class="flex items-center gap-1.5 text-zinc-600">
+            <input type="checkbox" :checked="curve.levels !== null" @change="toggleMeasured(($event.target as HTMLInputElement).checked)" />
+            use measured levels
+          </label>
+        </div>
+        <p class="mb-4 text-xs text-zinc-500">
+          Look at the numbered bands on the panel and set how bright each one looks (0 = black, 100 = white). Bands that look the same get
+          the same value (use “= n” to copy the band on the left). Photos are then dithered with the levels that really differ, and previews
+          show the panel's grays.
+        </p>
+        <div v-if="curve.levels" class="grid grid-cols-8 gap-x-1 gap-y-5 sm:grid-cols-16 lg:grid-cols-8 2xl:grid-cols-16">
+          <div v-for="(v, i) in curve.levels" :key="i" class="flex min-w-0 flex-col items-center gap-1">
+            <span class="font-mono text-xs">{{ Math.round(v * 100) }}</span>
+            <input
+              v-model.number="curve.levels[i]"
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              class="h-24 w-6 [direction:rtl] [writing-mode:vertical-lr]"
+              :aria-label="`Level ${i} brightness`"
+            />
+            <span class="h-7 w-full max-w-7 rounded border border-zinc-300" :style="{ background: `rgb(${v * 255},${v * 255},${v * 255})` }" />
+            <span class="text-xs font-semibold">{{ i }}</span>
+            <button
+              v-if="i > 0"
+              type="button"
+              class="text-[10px] leading-none text-zinc-400 hover:text-zinc-900"
+              :title="`Same as level ${i - 1}`"
+              @click="sameAsPrevious(i)"
+            >
+              = {{ i - 1 }}
+            </button>
+            <span v-else class="text-[10px] leading-none">&nbsp;</span>
           </div>
-          <input :id="`curve-${s.key}`" v-model.number="curve[s.key]" type="range" :min="s.min" :max="s.max" :step="s.step" class="w-full" />
-          <p class="text-xs text-zinc-400">{{ s.help }}</p>
         </div>
-      </div>
-    </div>
+        <p v-else class="text-xs text-zinc-400">Off: the {{ levelCount }} levels are treated as evenly spaced.</p>
+        <button v-if="curve.levels" type="button" class="mt-4 text-xs text-zinc-500 hover:text-zinc-900" @click="curve.levels = even()">
+          Reset to even levels
+        </button>
+      </section>
 
-    <div class="rounded-lg border border-zinc-200 bg-white p-4 text-sm">
-      <div class="mb-1 flex flex-wrap items-center gap-3">
-        <span class="font-medium">2. Measure the {{ levelCount }} gray levels</span>
-        <label class="flex items-center gap-1.5 text-zinc-600">
-          <input type="checkbox" :checked="curve.levels !== null" @change="toggleMeasured(($event.target as HTMLInputElement).checked)" />
-          use measured levels
-        </label>
-      </div>
-      <p class="mb-4 text-xs text-zinc-500">
-        Look at the numbered bands on the panel and set how bright each one looks (0 = black, 100 = white). Bands that look the same should
-        get the same value; a band that looks lighter than its right neighbour may get a higher value. Photos are then dithered with the
-        levels that really differ, and the previews show the panel's grays. The lower ramp on the pattern shows one step per distinct level.
-      </p>
-      <div v-if="curve.levels" class="flex gap-1 overflow-x-auto pb-2">
-        <div v-for="(v, i) in curve.levels" :key="i" class="flex w-12 shrink-0 flex-col items-center gap-1">
-          <span class="font-mono text-xs">{{ Math.round(v * 100) }}</span>
-          <input
-            v-model.number="curve.levels[i]"
-            type="range"
-            min="0"
-            max="1"
-            step="0.01"
-            class="h-32 [direction:rtl] [writing-mode:vertical-lr]"
-            :aria-label="`Level ${i} brightness`"
-          />
-          <span class="size-8 rounded border border-zinc-300" :style="{ background: `rgb(${v * 255},${v * 255},${v * 255})` }" />
-          <span class="text-xs font-semibold">{{ i }}</span>
-          <button v-if="i > 0" type="button" class="text-[10px] text-zinc-400 hover:text-zinc-900" title="Same as the band on the left" @click="sameAsPrevious(i)">= {{ i - 1 }}</button>
+      <section class="rounded-lg border border-zinc-200 bg-white p-4 text-sm">
+        <h3 class="mb-1 font-medium">3. Overall contrast <span class="font-normal text-zinc-400">(optional)</span></h3>
+        <p class="mb-3 text-xs text-zinc-500">Applied to every image before the levels; affects all screens of {{ model.name }}.</p>
+        <div class="grid gap-4 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+          <div v-for="s in sliders" :key="s.key">
+            <div class="mb-1 flex justify-between">
+              <label :for="`curve-${s.key}`" class="text-zinc-600">{{ s.label }}</label>
+              <span class="font-mono text-xs">{{ curve[s.key].toFixed(2) }}</span>
+            </div>
+            <input :id="`curve-${s.key}`" v-model.number="curve[s.key]" type="range" :min="s.min" :max="s.max" :step="s.step" class="w-full" />
+            <p class="text-xs text-zinc-400">{{ s.help }}</p>
+          </div>
         </div>
-      </div>
-      <p v-else class="text-xs text-zinc-400">Off: the {{ levelCount }} levels are treated as evenly spaced.</p>
+      </section>
 
-      <div class="mt-4 flex flex-wrap items-center gap-3 border-t border-zinc-100 pt-4">
-        <button type="button" class="rounded-md bg-zinc-900 px-3 py-1.5 text-white hover:bg-zinc-700 disabled:opacity-50" :disabled="busy || !changed" @click="apply">
+      <div class="flex flex-wrap items-center gap-3">
+        <button type="button" class="rounded-md bg-zinc-900 px-3 py-1.5 text-sm text-white hover:bg-zinc-700 disabled:opacity-50" :disabled="busy || !changed" @click="apply">
           Save calibration
         </button>
-        <button type="button" class="inline-flex items-center gap-1 text-zinc-500 hover:text-zinc-900" :disabled="!changed" @click="resetToSaved">
+        <button type="button" class="inline-flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-900 disabled:opacity-40" :disabled="!changed" @click="resetToSaved">
           <RotateCcw class="size-3.5" />
           Revert
         </button>
-        <button v-if="curve.levels" type="button" class="text-zinc-500 hover:text-zinc-900" @click="curve.levels = even()">Even levels</button>
+        <span v-if="changed" class="text-xs text-amber-600">unsaved</span>
         <span v-if="message" class="text-xs" :class="message.ok ? 'text-emerald-700' : 'text-red-600'">{{ message.text }}</span>
       </div>
     </div>
 
-    <div class="rounded-lg border border-zinc-200 bg-white p-4">
+    <!-- Preview, kept in view while adjusting -->
+    <section class="rounded-lg border border-zinc-200 bg-white p-4 lg:sticky lg:top-4">
       <div class="mb-3 flex items-center justify-between text-sm">
-        <span class="font-medium">Pattern as the panel should show it</span>
+        <h3 class="font-medium">Pattern as the panel should show it</h3>
         <Loader2 v-if="previewing" class="size-4 animate-spin text-zinc-400" />
       </div>
       <img v-if="preview" :src="preview" alt="Calibration pattern preview" class="w-full rounded border border-zinc-200" />
       <div v-else class="flex aspect-[4/3] items-center justify-center rounded border border-dashed border-zinc-300 text-sm text-zinc-400">Rendering…</div>
       <p class="mt-2 text-xs text-zinc-400">
-        Emulated with the levels above. If it matches the panel, previews everywhere will too. A monitor can't show e-ink exactly, so
-        judge smoothness on the device.
+        Emulated with the levels on the left. When it matches the panel, previews everywhere will too. A monitor can't show e-ink exactly,
+        so judge smoothness on the device.
       </p>
-    </div>
+    </section>
   </div>
 </template>

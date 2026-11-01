@@ -239,6 +239,19 @@ func (s *Store) PruneRenders(ctx context.Context, screenID int64, keep int) ([]s
 	return unused, nil
 }
 
+// RenderFilenames returns the image files that stored renders reference.
+func (s *Store) RenderFilenames(ctx context.Context) (map[string]bool, error) {
+	var names []string
+	if err := s.DB.SelectContext(ctx, &names, `SELECT DISTINCT filename FROM renders WHERE filename IS NOT NULL`); err != nil {
+		return nil, err
+	}
+	out := make(map[string]bool, len(names))
+	for _, n := range names {
+		out[n] = true
+	}
+	return out, nil
+}
+
 // ScreensInUse returns ids of screens that are in an enabled item of a playlist assigned to an
 // active device — the ones the scheduler keeps fresh.
 func (s *Store) ScreensInUse(ctx context.Context) ([]int64, error) {

@@ -28,7 +28,8 @@ internal/device/       device lifecycle: provisioning, approval, telemetry, logs
 internal/events/       in-process pub/sub feeding the SSE stream
 internal/firmware/     device listener (/api/setup, /api/display, /api/log, /images)
 internal/imaging/      grayscale, resize, tone curve, quantize/dither, 1/2/4-bit PNG encoder
-internal/render/       page composition, headless browser, render pipeline, scheduler, calibration
+internal/render/       page composition, headless browser, render pipeline, scheduler, calibration, cleanup
+internal/secret/       AES-256-GCM encryption of secrets at rest
 internal/tmpl/         screen template engine (html/template + helpers)
 internal/assets/       vendored trmnl-framework release (scripts/vendor-framework.sh)
 internal/migrations/   embedded SQL migrations (golang-migrate)
@@ -83,6 +84,7 @@ applied on startup.
 | `CNSL_CHROME_URL` | — | Remote headless Chrome; empty = launch a local one |
 | `CNSL_RENDER_BASE_URL` | `http://localhost:<port>` | URL Chrome uses to reach the dashboard listener |
 | `CNSL_TIMEZONE` | `TZ`, else the system zone | Household timezone |
+| `CNSL_SECRET_KEY` | — | Base64 32-byte key that encrypts connector secrets (tokens) at rest. Without it a key is generated into `<data>/secret.key`; keep it outside the data dir (env/Docker secret) for real protection. Generate one with `openssl rand -base64 32`. |
 | `CNSL_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
 | `CNSL_LOG_FORMAT` | `text` | `text` or `json` |
 

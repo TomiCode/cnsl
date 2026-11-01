@@ -89,6 +89,9 @@ func (s *Server) CreateConnector(ctx context.Context, req gen.CreateConnectorReq
 	if err != nil {
 		return invalid(err), nil
 	}
+	if config, err = s.connectors.SealConfig(t.Key(), config); err != nil {
+		return nil, err
+	}
 	c := store.Connector{Type: t.Key(), Name: strings.TrimSpace(req.Body.Name), Config: config.JSON()}
 	if err := s.store.SaveConnector(ctx, &c); err != nil {
 		return nil, err
@@ -113,6 +116,10 @@ func (s *Server) UpdateConnector(ctx context.Context, req gen.UpdateConnectorReq
 	config, err := t.ConfigSchema().Normalize(merged)
 	if err != nil {
 		return gen.UpdateConnector422ApplicationProblemPlusJSONResponse(invalidProblem(err)), nil
+	}
+	// Kept secrets are still sealed (Seal leaves them alone); new ones get sealed here.
+	if config, err = s.connectors.SealConfig(c.Type, config); err != nil {
+		return nil, err
 	}
 	c.Name = strings.TrimSpace(req.Body.Name)
 	c.Config = config.JSON()
@@ -163,7 +170,10 @@ func (s *Server) TestConnector(ctx context.Context, req gen.TestConnectorRequest
 	if err != nil {
 		return fail(err, 0), nil
 	}
-	config, _ := connector.ParseValues(c.Config)
+	config, err := s.connectors.OpenConfig(c.Type, c.Config)
+	if err != nil {
+		return fail(err, 0), nil
+	}
 	start := time.Now()
 	data, err := s.connectors.Test(ctx, c.Type, config, params)
 	if err != nil {

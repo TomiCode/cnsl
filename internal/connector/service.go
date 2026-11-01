@@ -29,6 +29,7 @@ type Service struct {
 	store *store.Store
 	log   *slog.Logger
 	env   Env
+	box   Sealer // encrypts secret config fields at rest
 
 	// OnChange is called with the screens whose data changed after a background refresh.
 	OnChange func(screenIDs []int64)
@@ -37,10 +38,11 @@ type Service struct {
 	inFlight map[string]*sync.Mutex // one fetch per cache key at a time
 }
 
-func NewService(st *store.Store, log *slog.Logger) *Service {
+func NewService(st *store.Store, log *slog.Logger, box Sealer) *Service {
 	return &Service{
 		store:    st,
 		log:      log,
+		box:      box,
 		env:      Env{HTTP: &http.Client{Timeout: fetchTimeout}},
 		inFlight: map[string]*sync.Mutex{},
 	}
@@ -141,7 +143,7 @@ func (s *Service) load(ctx context.Context, id int64) (store.Connector, Type, Va
 	if !ok {
 		return conn, nil, nil, fmt.Errorf("unknown connector type %q", conn.Type)
 	}
-	config, err := ParseValues(conn.Config)
+	config, err := s.OpenConfig(conn.Type, conn.Config)
 	return conn, typ, config, err
 }
 
