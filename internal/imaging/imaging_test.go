@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"image"
 	"image/png"
+	"math"
 	"testing"
 )
 
@@ -87,7 +88,7 @@ func TestToneCurve(t *testing.T) {
 	if dark[128] >= 128 {
 		t.Fatalf("gamma 2 should darken mid-tones, got %d", dark[128])
 	}
-	if (ToneCurve{Gamma: 1, Black: 0.5, White: 0.6}).Validate() == nil {
+	if (ToneCurve{Gamma: 1, Black: 0.5, White: 0.6}).Validate(4) == nil {
 		t.Fatal("narrow range should be invalid")
 	}
 }
@@ -131,6 +132,50 @@ func TestForPageRoundTrip(t *testing.T) {
 	for i := range levels.Pix {
 		if back.Pix[i] != levels.Pix[i] {
 			t.Fatalf("linear: level %d came back as %d", levels.Pix[i], back.Pix[i])
+		}
+	}
+}
+
+// A panel whose levels 1–3 all look nearly black and whose mid-grays bunch together.
+func unevenLevels() []float64 {
+	return []float64{0, .03, .05, .06, .2, .3, .38, .45, .52, .6, .68, .75, .82, .9, .96, 1}
+}
+
+func TestQuantizeToMeasuredPalette(t *testing.T) {
+	curve := ToneCurve{Gamma: 1, White: 1, Levels: unevenLevels()}
+	if err := curve.Validate(4); err != nil {
+		t.Fatal(err)
+	}
+	if (ToneCurve{Gamma: 1, White: 1, Levels: []float64{0, 1}}).Validate(4) == nil {
+		t.Fatal("wrong number of levels should be invalid")
+	}
+	p := curve.Palette(4)
+	src := image.NewGray(image.Rect(0, 0, 1, 1))
+	src.Pix[0] = 51 // 20% gray: closest real level is 4 (.2), not level 3 as on an ideal panel
+	if got := QuantizeTo(src, p, DitherNone).Pix[0]; got != 4 {
+		t.Fatalf("20%% gray → level %d, want 4", got)
+	}
+
+	// Dithering against real brightnesses keeps the perceived average.
+	flat := image.NewGray(image.Rect(0, 0, 64, 64))
+	for i := range flat.Pix {
+		flat.Pix[i] = 30
+	}
+	emulated := p.Emulate(QuantizeTo(flat, p, DitherFloydSteinberg))
+	sum := 0
+	for _, v := range emulated.Pix {
+		sum += int(v)
+	}
+	if avg := sum / len(emulated.Pix); avg < 26 || avg > 34 {
+		t.Fatalf("perceived average %d, want ≈30", avg)
+	}
+
+	// Pre-dithered backgrounds still round-trip through the page pipeline.
+	levels := QuantizeTo(curve.Apply(gradient(256, 2)), p, DitherFloydSteinberg)
+	back := QuantizeTo(curve.Apply(ForPage(levels, curve, 4)), p, DitherNone)
+	for i := range levels.Pix {
+		if back.Pix[i] != levels.Pix[i] && math.Abs(p[back.Pix[i]]-p[levels.Pix[i]]) > 8 {
+			t.Fatalf("level %d came back as %d", levels.Pix[i], back.Pix[i])
 		}
 	}
 }

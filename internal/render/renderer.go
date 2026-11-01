@@ -71,6 +71,7 @@ type Request struct {
 type Result struct {
 	Raw      []byte // browser screenshot (8-bit, before quantization)
 	Device   []byte // PNG exactly as a device would receive it
+	Panel    []byte // how the panel shows it, using the model's measured gray levels
 	Levels   *image.Gray
 	BitDepth int
 	Errors   []*tmpl.Error
@@ -121,7 +122,8 @@ func (r *Renderer) Render(ctx context.Context, req Request) (Result, error) {
 		if bgLevels == nil {
 			return Result{}, errors.New("this image screen has no image yet")
 		}
-		res, err := levelsResult(bgLevels, model.BitDepth)
+		curve, _ := imaging.ParseToneCurve(model.ToneCurve.String)
+		res, err := levelsResult(bgLevels, model.BitDepth, curve.Palette(model.BitDepth))
 		res.Duration = time.Since(start)
 		return res, err
 	}
@@ -222,15 +224,26 @@ func (r *Renderer) advanceSlideshow(ctx context.Context, screenID int64) {
 }
 
 // levelsResult packages prepared level indexes as a render result (image screens).
-func levelsResult(levels *image.Gray, bitDepth int) (Result, error) {
-	var device, raw bytes.Buffer
-	if err := imaging.EncodePNG(&device, levels, bitDepth); err != nil {
-		return Result{}, err
-	}
+func levelsResult(levels *image.Gray, bitDepth int, pal imaging.Palette) (Result, error) {
+	var raw bytes.Buffer
 	if err := png.Encode(&raw, imaging.Expand(levels, bitDepth)); err != nil {
 		return Result{}, err
 	}
-	return Result{Raw: raw.Bytes(), Device: device.Bytes(), Levels: levels, BitDepth: bitDepth}, nil
+	res, err := finish(levels, bitDepth, pal)
+	res.Raw = raw.Bytes()
+	return res, err
+}
+
+// finish encodes level indexes as the device PNG plus the panel emulation for previews.
+func finish(levels *image.Gray, bitDepth int, pal imaging.Palette) (Result, error) {
+	var device, panel bytes.Buffer
+	if err := imaging.EncodePNG(&device, levels, bitDepth); err != nil {
+		return Result{}, err
+	}
+	if err := png.Encode(&panel, pal.Emulate(levels)); err != nil {
+		return Result{}, err
+	}
+	return Result{Device: device.Bytes(), Panel: panel.Bytes(), Levels: levels, BitDepth: bitDepth}, nil
 }
 
 func (r *Renderer) prune(ctx context.Context, screenID int64) {
@@ -269,11 +282,9 @@ func (r *Renderer) renderHTML(ctx context.Context, html string, model store.Devi
 	if err != nil {
 		r.log.WarnContext(ctx, "invalid tone curve, using linear", "model", model.Key, "err", err)
 	}
-	levels := imaging.Quantize(curve.Apply(gray), model.BitDepth, imaging.DitherNone)
-
-	var device bytes.Buffer
-	if err := imaging.EncodePNG(&device, levels, model.BitDepth); err != nil {
-		return Result{}, err
-	}
-	return Result{Raw: raw, Device: device.Bytes(), Levels: levels, BitDepth: model.BitDepth}, nil
+	pal := curve.Palette(model.BitDepth)
+	levels := imaging.QuantizeTo(curve.Apply(gray), pal, imaging.DitherNone)
+	res, err := finish(levels, model.BitDepth, pal)
+	res.Raw = raw
+	return res, err
 }

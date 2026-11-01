@@ -402,6 +402,7 @@ func toPreview(res render.Result) gen.Preview {
 	p := gen.Preview{
 		Raw:        "data:image/png;base64," + base64.StdEncoding.EncodeToString(res.Raw),
 		Device:     "data:image/png;base64," + base64.StdEncoding.EncodeToString(res.Device),
+		Panel:      dataURL(res.Panel),
 		DurationMs: res.Duration.Milliseconds(),
 		Errors:     make([]gen.TemplateError, 0, len(res.Errors)),
 	}
@@ -439,4 +440,12 @@ type regionInput = struct {
 	X           *int   `json:"x,omitempty"`
 	Y           *int   `json:"y,omitempty"`
 	Z           *int   `json:"z,omitempty"`
+}
+
+func dataURL(png []byte) *string {
+	if png == nil {
+		return nil
+	}
+	u := "data:image/png;base64," + base64.StdEncoding.EncodeToString(png)
+	return &u
 }

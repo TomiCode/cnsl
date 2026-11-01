@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: cnsl dashboard API
-  version: 0.5.0
+  version: 0.6.0
   description: |
     API used by the cnsl web dashboard. Device (firmware) endpoints are not part of this spec;
     they are served on the separate device listener (and mirrored under /device on the
@@ -1023,6 +1023,15 @@ components:
         gamma: { type: number, minimum: 0.2, maximum: 5, example: 1.0 }
         black: { type: number, minimum: 0, maximum: 0.8, example: 0.0 }
         white: { type: number, minimum: 0.2, maximum: 1, example: 1.0 }
+        levels:
+          type: array
+          nullable: true
+          maxItems: 16
+          items: { type: number, minimum: 0, maximum: 1 }
+          description: |
+            Measured brightness of each device gray level on the panel (0 = black, 1 = white),
+            one per level. Quantization and dithering target these real levels; null = evenly
+            spaced.
 
     Region:
       type: object
@@ -1206,6 +1215,9 @@ components:
         device:
           type: string
           description: data:image/png;base64 URL of the image as the device gets it.
+        panel:
+          type: string
+          description: data:image/png;base64 URL of how the panel shows it (measured gray levels).
         errors:
           type: array
           items:

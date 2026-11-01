@@ -133,38 +133,10 @@ func enlarge(src *image.Gray, w, h int) *image.Gray {
 	return dst
 }
 
-// Quantize maps every pixel to one of the 2^bitDepth gray levels. The returned image holds
-// level indexes (0 = black … levels-1 = white), ready for EncodePNG.
+// Quantize maps every pixel to one of 2^bitDepth evenly spaced gray levels (see QuantizeTo for
+// measured, uneven levels). The returned image holds level indexes, ready for EncodePNG.
 func Quantize(src *image.Gray, bitDepth int, dither Dither) *image.Gray {
-	levels := 1 << bitDepth
-	step := 255.0 / float64(levels-1)
-	w, h := src.Bounds().Dx(), src.Bounds().Dy()
-	out := image.NewGray(image.Rect(0, 0, w, h))
-	nearest := func(v float64) int {
-		return min(max(int(v/step+0.5), 0), levels-1)
-	}
-	at := func(x, y int) float64 { return float64(src.Pix[y*src.Stride+x]) }
-
-	switch dither {
-	case DitherFloydSteinberg:
-		diffuse(out, w, h, at, nearest, step, floydSteinberg)
-	case DitherAtkinson:
-		diffuse(out, w, h, at, nearest, step, atkinson)
-	case DitherOrdered:
-		for y := range h {
-			for x := range w {
-				t := (float64(bayer8[y%8][x%8])+0.5)/64 - 0.5 // −0.5 … 0.5 of a step
-				out.Pix[y*out.Stride+x] = uint8(nearest(at(x, y) + t*step))
-			}
-		}
-	default:
-		for y := range h {
-			for x := range w {
-				out.Pix[y*out.Stride+x] = uint8(nearest(at(x, y)))
-			}
-		}
-	}
-	return out
+	return QuantizeTo(src, LinearPalette(bitDepth), dither)
 }
 
 // kernel lists error-diffusion targets as (dx, dy, weight).
@@ -179,15 +151,15 @@ var (
 	atkinson = kernel{taps: [][3]int{{1, 0, 1}, {2, 0, 1}, {-1, 1, 1}, {0, 1, 1}, {1, 1, 1}, {0, 2, 1}}, divisor: 8}
 )
 
-func diffuse(out *image.Gray, w, h int, at func(x, y int) float64, nearest func(float64) int, step float64, k kernel) {
+func diffuse(out *image.Gray, w, h int, at func(x, y int) float64, p Palette, k kernel) {
 	const pad = 2
 	rows := [3][]float64{make([]float64, w+2*pad), make([]float64, w+2*pad), make([]float64, w+2*pad)}
 	for y := range h {
 		for x := range w {
 			v := at(x, y) + rows[0][x+pad]
-			level := nearest(v)
+			level := p.nearest(v)
 			out.Pix[y*out.Stride+x] = uint8(level)
-			e := v - float64(level)*step
+			e := v - p[level] // error against what the panel really shows
 			for _, t := range k.taps {
 				rows[t[1]][x+pad+t[0]] += e * float64(t[2]) / k.divisor
 			}

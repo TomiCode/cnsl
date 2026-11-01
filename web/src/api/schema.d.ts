@@ -696,6 +696,12 @@ export interface components {
             black: number;
             /** @example 1 */
             white: number;
+            /**
+             * @description Measured brightness of each device gray level on the panel (0 = black, 1 = white),
+             *     one per level. Quantization and dithering target these real levels; null = evenly
+             *     spaced.
+             */
+            levels?: number[] | null;
         };
         Region: {
             /** Format: int64 */
@@ -831,6 +837,8 @@ export interface components {
             raw: string;
             /** @description data:image/png;base64 URL of the image as the device gets it. */
             device: string;
+            /** @description data:image/png;base64 URL of how the panel shows it (measured gray levels). */
+            panel?: string;
             errors: components["schemas"]["TemplateError"][];
             /** @description Connector problems by binding alias. */
             data_errors?: {

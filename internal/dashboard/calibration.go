@@ -59,15 +59,15 @@ func (s *Server) StopDeviceCalibration(ctx context.Context, req gen.StopDeviceCa
 
 func (s *Server) SetToneCurve(ctx context.Context, req gen.SetToneCurveRequestObject) (gen.SetToneCurveResponseObject, error) {
 	curve := fromToneCurve(*req.Body)
-	if err := curve.Validate(); err != nil {
-		return gen.SetToneCurve422ApplicationProblemPlusJSONResponse(invalidProblem(err)), nil
-	}
 	m, err := s.store.DeviceModel(ctx, req.Id)
 	if errors.Is(err, store.ErrNotFound) {
 		return gen.SetToneCurve404ApplicationProblemPlusJSONResponse{ProblemApplicationProblemPlusJSONResponse: notFoundProblem("device model")}, nil
 	}
 	if err != nil {
 		return nil, err
+	}
+	if err := curve.Validate(m.BitDepth); err != nil {
+		return gen.SetToneCurve422ApplicationProblemPlusJSONResponse(invalidProblem(err)), nil
 	}
 	b, _ := json.Marshal(curve)
 	m.ToneCurve = sql.NullString{String: string(b), Valid: true}
@@ -91,15 +91,15 @@ func (s *Server) SetToneCurve(ctx context.Context, req gen.SetToneCurveRequestOb
 
 func (s *Server) PreviewToneCurve(ctx context.Context, req gen.PreviewToneCurveRequestObject) (gen.PreviewToneCurveResponseObject, error) {
 	curve := fromToneCurve(*req.Body)
-	if err := curve.Validate(); err != nil {
-		return gen.PreviewToneCurve422ApplicationProblemPlusJSONResponse(invalidProblem(err)), nil
-	}
 	m, err := s.store.DeviceModel(ctx, req.Id)
 	if errors.Is(err, store.ErrNotFound) {
 		return gen.PreviewToneCurve404ApplicationProblemPlusJSONResponse{ProblemApplicationProblemPlusJSONResponse: notFoundProblem("device model")}, nil
 	}
 	if err != nil {
 		return nil, err
+	}
+	if err := curve.Validate(m.BitDepth); err != nil {
+		return gen.PreviewToneCurve422ApplicationProblemPlusJSONResponse(invalidProblem(err)), nil
 	}
 	ctx, cancel := context.WithTimeout(ctx, previewTimeout)
 	defer cancel()
@@ -112,10 +112,25 @@ func (s *Server) PreviewToneCurve(ctx context.Context, req gen.PreviewToneCurveR
 
 func fromToneCurve(c gen.ToneCurve) imaging.ToneCurve {
 	round := func(v float32) float64 { return math.Round(float64(v)*1000) / 1000 } // float32 noise
-	return imaging.ToneCurve{Gamma: round(c.Gamma), Black: round(c.Black), White: round(c.White)}
+	curve := imaging.ToneCurve{Gamma: round(c.Gamma), Black: round(c.Black), White: round(c.White)}
+	if c.Levels != nil {
+		curve.Levels = make([]float64, len(*c.Levels))
+		for i, v := range *c.Levels {
+			curve.Levels[i] = round(v)
+		}
+	}
+	return curve
 }
 
 func toToneCurve(s sql.NullString) gen.ToneCurve {
 	c, _ := imaging.ParseToneCurve(s.String)
-	return gen.ToneCurve{Gamma: float32(c.Gamma), Black: float32(c.Black), White: float32(c.White)}
+	out := gen.ToneCurve{Gamma: float32(c.Gamma), Black: float32(c.Black), White: float32(c.White)}
+	if c.Levels != nil {
+		levels := make([]float32, len(c.Levels))
+		for i, v := range c.Levels {
+			levels[i] = float32(v)
+		}
+		out.Levels = &levels
+	}
+	return out
 }

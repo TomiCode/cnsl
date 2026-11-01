@@ -449,7 +449,7 @@ const num = 'w-20 rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm f
           </p>
           <div v-if="preview" class="relative" :class="zoom === 'fit' ? 'w-full' : 'w-max'">
             <img
-              :src="previewMode === 'device' ? preview.device : preview.raw"
+              :src="previewMode === 'device' ? (preview.panel ?? preview.device) : preview.raw"
               alt="Screen preview"
               class="border border-zinc-300 bg-white shadow-sm"
               :class="zoom === 'fit' ? 'w-full' : 'max-w-none [image-rendering:pixelated]'"

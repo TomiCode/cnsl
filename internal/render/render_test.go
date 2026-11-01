@@ -92,6 +92,12 @@ func TestRenderScreen(t *testing.T) {
 			t.Fatal(err)
 		}
 		_ = os.WriteFile(filepath.Join(out, "calibration-device.png"), cal.Device, 0o644)
+		uneven := imaging.ToneCurve{Gamma: 1, White: 1, Levels: []float64{0, .03, .05, .06, .2, .3, .38, .45, .52, .6, .68, .75, .82, .9, .96, 1}}
+		cal2, err := r.CalibrationPreview(ctx, model, uneven)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = os.WriteFile(filepath.Join(out, "calibration-uneven-panel.png"), cal2.Panel, 0o644)
 	}
 
 	// A broken template is reported, not fatal.

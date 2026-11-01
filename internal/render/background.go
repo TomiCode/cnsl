@@ -157,7 +157,8 @@ func (r *Renderer) openAsset(a store.Asset) (image.Image, error) {
 	return img, nil
 }
 
-// AssetPreview shows how an asset looks on a model with the given fit and dithering.
+// AssetPreview shows how an asset looks on a model's panel with the given fit and dithering
+// (emulated with the model's measured gray levels).
 func (r *Renderer) AssetPreview(ctx context.Context, assetID, modelID int64, fit imaging.Fit, dither imaging.Dither) ([]byte, error) {
 	model, err := r.store.DeviceModel(ctx, modelID)
 	if err != nil {
@@ -167,7 +168,8 @@ func (r *Renderer) AssetPreview(ctx context.Context, assetID, modelID int64, fit
 	if err != nil {
 		return nil, err
 	}
+	curve, _ := imaging.ParseToneCurve(model.ToneCurve.String)
 	var buf bytes.Buffer
-	err = imaging.EncodePNG(&buf, levels, model.BitDepth)
+	err = png.Encode(&buf, curve.Palette(model.BitDepth).Emulate(levels))
 	return buf.Bytes(), err
 }
