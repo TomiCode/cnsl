@@ -969,6 +969,22 @@ export interface components {
              */
             levels?: number[] | null;
         };
+        /**
+         * @description How a region lays out its content. The region supplies the framework layout (and title bar);
+         *     the template only lists the pieces. mode "" = the template brings its own layout.
+         */
+        Arrange: {
+            /** @enum {string} */
+            mode: "" | "stack" | "row" | "grid" | "columns";
+            /** @description Grid columns; 0 = as many as fit. */
+            cols?: number;
+            /** @enum {string} */
+            align?: "" | "top" | "center" | "bottom";
+            /** @enum {string} */
+            gap?: "" | "none" | "small" | "medium" | "large" | "xlarge";
+            /** @description Template for the title bar below the layout; empty = none. */
+            title_bar?: string;
+        };
         Region: {
             /** Format: int64 */
             id: number;
@@ -982,6 +998,7 @@ export interface components {
             /** @description Let the screen background show through this region. */
             transparent: boolean;
             template: string;
+            arrange: components["schemas"]["Arrange"];
         };
         Render: {
             /** Format: int64 */
@@ -1082,6 +1099,7 @@ export interface components {
                 key: string;
                 template: string;
                 transparent?: boolean;
+                arrange?: components["schemas"]["Arrange"];
                 x?: number;
                 y?: number;
                 w?: number;
@@ -1095,6 +1113,10 @@ export interface components {
             /** @description Unsaved region templates by region key. */
             templates?: {
                 [key: string]: string;
+            };
+            /** @description Unsaved region arrangements by region key. */
+            arrange?: {
+                [key: string]: components["schemas"]["Arrange"];
             };
             head?: string;
         };
@@ -2121,6 +2143,7 @@ export interface operations {
                 };
             };
             404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
         };
     };

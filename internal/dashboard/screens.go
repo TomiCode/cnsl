@@ -75,7 +75,7 @@ func (s *Server) screenResponse(ctx context.Context, sc store.Screen) (gen.Scree
 	}
 	for _, r := range regions {
 		out.Regions = append(out.Regions, gen.Region{Id: r.ID, Key: r.Key, X: r.X, Y: r.Y, W: r.W, H: r.H, Z: r.Z,
-			Transparent: r.Transparent, Template: r.Template})
+			Transparent: r.Transparent, Template: r.Template, Arrange: toArrange(r.Arrange)})
 	}
 	return out, nil
 }
@@ -118,7 +118,8 @@ func (s *Server) CreateScreen(ctx context.Context, req gen.CreateScreenRequestOb
 	var regions []store.Region
 	switch kind {
 	case gen.ScreenKindTemplate:
-		regions = []store.Region{{Key: "main", W: model.Width, H: model.Height, Template: render.DefaultTemplate}}
+		regions = []store.Region{{Key: "main", W: model.Width, H: model.Height, Template: render.DefaultTemplate,
+			Arrange: render.DefaultArrange.JSON()}}
 	case gen.ScreenKindImage:
 		sc.RenderInterval = 3600 // only matters for slideshows
 	default:
@@ -255,13 +256,13 @@ func (s *Server) mergeRegions(ctx context.Context, sc store.Screen, model store.
 	if layout.Key == render.LayoutFree {
 		out := make([]store.Region, 0, len(in))
 		for _, r := range in {
-			reg := store.Region{Key: r.Key, Template: r.Template}
+			reg := store.Region{Key: r.Key}
 			if r.Id != nil {
 				reg = existing[byID[*r.Id]]
-				reg.Key, reg.Template = r.Key, r.Template
+				reg.Key = r.Key
 			}
-			if r.Transparent != nil {
-				reg.Transparent = *r.Transparent
+			if err := applyContent(&reg, r); err != nil {
+				return nil, err
 			}
 			if r.X != nil && r.Y != nil && r.W != nil && r.H != nil {
 				reg.X, reg.Y, reg.W, reg.H = *r.X, *r.Y, *r.W, *r.H
@@ -293,9 +294,8 @@ func (s *Server) mergeRegions(ctx context.Context, sc store.Screen, model store.
 		if idx < 0 {
 			continue // new regions come from the layout's slots
 		}
-		merged[idx].Template = r.Template
-		if r.Transparent != nil {
-			merged[idx].Transparent = *r.Transparent
+		if err := applyContent(&merged[idx], r); err != nil {
+			return nil, err
 		}
 	}
 	out := render.ApplyLayout(layout, model, merged)
@@ -304,14 +304,71 @@ func (s *Server) mergeRegions(ctx context.Context, sc store.Screen, model store.
 	for _, r := range in {
 		for i := range out {
 			if out[i].Key == r.Key {
-				out[i].Template = r.Template
-				if r.Transparent != nil {
-					out[i].Transparent = *r.Transparent
+				if err := applyContent(&out[i], r); err != nil {
+					return nil, err
 				}
 			}
 		}
 	}
 	return out, nil
+}
+
+// regionInput is one entry of ScreenUpdate.regions (an anonymous struct in the generated code).
+type regionInput = struct {
+	Arrange     *gen.Arrange `json:"arrange,omitempty"`
+	H           *int         `json:"h,omitempty"`
+	Id          *int64       `json:"id,omitempty"`
+	Key         string       `json:"key"`
+	Template    string       `json:"template"`
+	Transparent *bool        `json:"transparent,omitempty"`
+	W           *int         `json:"w,omitempty"`
+	X           *int         `json:"x,omitempty"`
+	Y           *int         `json:"y,omitempty"`
+	Z           *int         `json:"z,omitempty"`
+}
+
+// applyContent copies a submitted region's content and settings onto a region.
+func applyContent(reg *store.Region, r regionInput) error {
+	reg.Template = r.Template
+	if r.Transparent != nil {
+		reg.Transparent = *r.Transparent
+	}
+	if r.Arrange != nil {
+		a := fromArrange(*r.Arrange)
+		if err := a.Validate(); err != nil {
+			return fmt.Errorf("region %q: %w", r.Key, err)
+		}
+		reg.Arrange = a.JSON()
+	}
+	return nil
+}
+
+func fromArrange(a gen.Arrange) render.Arrange {
+	out := render.Arrange{Mode: string(a.Mode)}
+	if a.Cols != nil {
+		out.Cols = *a.Cols
+	}
+	if a.Align != nil {
+		out.Align = string(*a.Align)
+	}
+	if a.Gap != nil {
+		out.Gap = string(*a.Gap)
+	}
+	if a.TitleBar != nil {
+		out.TitleBar = *a.TitleBar
+	}
+	return out
+}
+
+func toArrange(s string) gen.Arrange {
+	a, _ := render.ParseArrange(s)
+	out := gen.Arrange{Mode: gen.ArrangeMode(a.Mode)}
+	if a.Mode == "" {
+		return out
+	}
+	align, gap := gen.ArrangeAlign(a.Align), gen.ArrangeGap(a.Gap)
+	out.Cols, out.Align, out.Gap, out.TitleBar = &a.Cols, &align, &gap, &a.TitleBar
+	return out
 }
 
 func toBackground(b render.Background) gen.Background {
@@ -359,6 +416,16 @@ func (s *Server) PreviewScreen(ctx context.Context, req gen.PreviewScreenRequest
 		rreq.Sample = req.Body.Sample != nil && *req.Body.Sample
 		if req.Body.Templates != nil {
 			rreq.Overrides = *req.Body.Templates
+		}
+		if req.Body.Arrange != nil {
+			rreq.Arrange = map[string]render.Arrange{}
+			for key, a := range *req.Body.Arrange {
+				ra := fromArrange(a)
+				if err := ra.Validate(); err != nil {
+					return gen.PreviewScreen422ApplicationProblemPlusJSONResponse(invalidProblem(err)), nil
+				}
+				rreq.Arrange[key] = ra
+			}
 		}
 		rreq.Head = req.Body.Head
 	}
@@ -441,19 +508,6 @@ func toTemplateError(err error) gen.TemplateError {
 func rendererProblem(err error) gen.Problem {
 	detail := "the renderer is unavailable: " + err.Error()
 	return gen.Problem{Title: http.StatusText(http.StatusServiceUnavailable), Status: http.StatusServiceUnavailable, Detail: &detail}
-}
-
-// regionInput is one entry of ScreenUpdate.regions (an anonymous struct in the generated code).
-type regionInput = struct {
-	H           *int   `json:"h,omitempty"`
-	Id          *int64 `json:"id,omitempty"`
-	Key         string `json:"key"`
-	Template    string `json:"template"`
-	Transparent *bool  `json:"transparent,omitempty"`
-	W           *int   `json:"w,omitempty"`
-	X           *int   `json:"x,omitempty"`
-	Y           *int   `json:"y,omitempty"`
-	Z           *int   `json:"z,omitempty"`
 }
 
 func dataURL(png []byte) *string {

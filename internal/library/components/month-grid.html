@@ -1,9 +1,9 @@
 {{- $today := date "2" .Now }}
-<div class="layout layout--col gap--small">
+<div class="flex flex--col gap--small w--full">
   {{- if .title }}
-  <span class="title">{{ date "January 2006" .Now }}</span>
+  <span class="title text--center">{{ date "January 2006" .Now }}</span>
   {{- end }}
-  <table class="table table--small">
+  <table class="table table--small w--full">
     <thead>
       <tr>{{ range weekdays }}<th class="text--center"><span class="title title--small">{{ . }}</span></th>{{ end }}</tr>
     </thead>

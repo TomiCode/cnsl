@@ -1,8 +1,7 @@
 {{- with .weather }}
-<div class="layout layout--col layout--center">
-<div class="columns w--full">
+<div class="grid grid--cols-{{ len (take $.days .daily) }} gap--medium w--full">
   {{- range take $.days .daily }}
-  <div class="column text--center">
+  <div class="flex flex--col flex--center-x text--center">
     <span class="title title--small">{{ date "Mon" .date }}</span>
     {{- if $.icon_size }}{{ with .icon }}
     <div class="flex flex--center">{{ icon . $.icon_size }}</div>
@@ -14,7 +13,6 @@
     {{- end }}
   </div>
   {{- end }}
-</div>
 </div>
 {{- else }}
 <span class="label">{{ t "no_data" }}</span>

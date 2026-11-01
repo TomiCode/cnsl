@@ -27,7 +27,20 @@ interface DraftRegion {
   w: number
   h: number
   z: number
+  arrange: Arrange
 }
+type Arrange = Schemas['Arrange']
+
+// New regions only list their content; the region arranges it (see render.Arrange).
+const defaultArrange = (): Arrange => ({ mode: 'stack', align: 'center', gap: 'medium', title_bar: '{{ .Screen.Name }}' })
+const freeArrange = (): Arrange => ({ mode: 'stack', align: 'center', gap: 'small' })
+const arrangeModes: { value: Arrange['mode']; label: string }[] = [
+  { value: 'stack', label: 'Stack' },
+  { value: 'row', label: 'Row' },
+  { value: 'grid', label: 'Grid' },
+  { value: 'columns', label: 'Columns' },
+  { value: '', label: 'Custom HTML layout' },
+]
 
 const route = useRoute()
 const router = useRouter()
@@ -103,7 +116,7 @@ function changeRotation(value: Schemas['Rotation']) {
 const isFree = computed(() => draft.layout === 'free')
 const activeRegion = computed(() => draft.regions.find((r) => r.key === tab.value))
 
-const slotTemplate = `<div class="layout layout--col layout--center">\n  <span class="value value--large">{{ .Region.Key }}</span>\n</div>\n<div class="title_bar">\n  <span class="title">{{ .Screen.Name }}</span>\n</div>\n`
+const slotTemplate = `<span class="value value--large">{{ .Region.Key }}</span>\n`
 const freeTemplate = `<span class="value value--large value--tnums">{{ date "15:04" .Now }}</span>\n`
 
 function fromScreen(s: Schemas['Screen']): Draft {
@@ -116,7 +129,10 @@ function fromScreen(s: Schemas['Screen']): Draft {
     head: s.head,
     layout: s.layout,
     background: { ...s.background, asset_ids: [...(s.background.asset_ids ?? [])] },
-    regions: s.regions.map((r) => ({ id: r.id, key: r.key, template: r.template, transparent: r.transparent, x: r.x, y: r.y, w: r.w, h: r.h, z: r.z })),
+    regions: s.regions.map((r) => ({
+      id: r.id, key: r.key, template: r.template, transparent: r.transparent, x: r.x, y: r.y, w: r.w, h: r.h, z: r.z,
+      arrange: { ...r.arrange },
+    })),
   }
 }
 const snapshot = (d: Draft) => JSON.stringify(d)
@@ -193,7 +209,7 @@ function changeLayout(key: string) {
     let r = byKey.get(s.key)
     if (!r) {
       const reused = leftovers.shift()
-      r = reused ? { ...reused, key: s.key } : { key: s.key, template: s.view === 'full' ? slotTemplate : slotTemplate, transparent: false, x: 0, y: 0, w: 0, h: 0, z: 0 }
+      r = reused ? { ...reused, key: s.key } : { key: s.key, template: slotTemplate, transparent: false, x: 0, y: 0, w: 0, h: 0, z: 0, arrange: defaultArrange() }
     }
     return {
       ...r,
@@ -215,7 +231,7 @@ function addFreeRegion() {
   while (draft.regions.some((r) => r.key === `region_${n}`)) n++
   const w = Math.round(m.width / 3)
   const h = Math.round(m.height / 4)
-  draft.regions.push({ key: `region_${n}`, template: freeTemplate, transparent: true, x: Math.round(m.width / 20), y: Math.round(m.height / 20), w, h, z: draft.regions.length })
+  draft.regions.push({ key: `region_${n}`, template: freeTemplate, transparent: true, x: Math.round(m.width / 20), y: Math.round(m.height / 20), w, h, z: draft.regions.length, arrange: freeArrange() })
   tab.value = 'regions'
 }
 
@@ -228,8 +244,9 @@ async function runPreview() {
   previewing.value = true
   try {
     const templates = Object.fromEntries(draft.regions.map((r) => [r.key, r.template]))
+    const arrange = Object.fromEntries(draft.regions.map((r) => [r.key, r.arrange]))
     const res = unwrap(
-      await api.POST('/screens/{id}/preview', { params: { path: { id: id.value } }, body: { templates, head: draft.head, sample: sample.value } }),
+      await api.POST('/screens/{id}/preview', { params: { path: { id: id.value } }, body: { templates, arrange, head: draft.head, sample: sample.value } }),
     )
     preview.value = res
     errors.value = res.errors
@@ -360,11 +377,27 @@ const tabs = computed(() => {
     { key: 'head', label: 'Head (CSS)' },
   ]
 })
+// The region arranges its content, so a template with its own layout would nest layouts.
+const ownLayout = computed(() => {
+  const r = activeRegion.value
+  return !!r?.arrange.mode && /class="[^"]*\b(layout|title_bar)\b/.test(r.template)
+})
+
+function arrangeChanged() {
+  const a = activeRegion.value?.arrange
+  if (!a) return
+  a.align ||= 'center'
+  a.gap ||= 'medium'
+  a.cols ??= 0
+  void runPreview()
+}
+
 const regionErrors = computed(() => errors.value.filter((e) => e.region === tab.value))
 
 const intervals = [60, 300, 600, 900, 1800, 3600, 3 * 3600, 6 * 3600, 12 * 3600, 86400]
 const btn = 'inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-sm hover:bg-zinc-50 disabled:opacity-50'
 const input = 'rounded-md border border-zinc-300 bg-white px-2.5 py-1.5 text-sm focus:border-zinc-500 focus:outline-none'
+const mini = 'rounded border border-zinc-300 bg-white px-1.5 py-0.5 text-xs focus:border-zinc-500 focus:outline-none'
 const num = 'w-20 rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm focus:border-zinc-500 focus:outline-none'
 </script>
 
@@ -437,6 +470,38 @@ const num = 'w-20 rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm f
 
         <!-- Region template -->
         <template v-if="activeRegion">
+          <div class="flex flex-wrap items-center gap-2 border-b border-zinc-100 px-3 py-1.5 text-xs text-zinc-500">
+            <span>Arrange</span>
+            <select v-model="activeRegion.arrange.mode" :class="mini" aria-label="Arrangement" @change="arrangeChanged">
+              <option v-for="m in arrangeModes" :key="m.value" :value="m.value">{{ m.label }}</option>
+            </select>
+            <template v-if="activeRegion.arrange.mode">
+              <select v-if="activeRegion.arrange.mode === 'grid'" v-model.number="activeRegion.arrange.cols" :class="mini" aria-label="Grid columns" @change="runPreview">
+                <option :value="0">auto columns</option>
+                <option v-for="n in 6" :key="n" :value="n">{{ n }} column{{ n > 1 ? 's' : '' }}</option>
+              </select>
+              <select v-if="activeRegion.arrange.mode !== 'columns'" v-model="activeRegion.arrange.align" :class="mini" aria-label="Vertical alignment" @change="runPreview">
+                <option value="top">top</option>
+                <option value="center">center</option>
+                <option value="bottom">bottom</option>
+              </select>
+              <select v-model="activeRegion.arrange.gap" :class="mini" aria-label="Spacing" @change="runPreview">
+                <option value="none">no gap</option>
+                <option value="small">small gap</option>
+                <option value="medium">medium gap</option>
+                <option value="large">large gap</option>
+                <option value="xlarge">extra large gap</option>
+              </select>
+              <label v-if="!isFree" class="flex min-w-48 flex-1 items-center gap-1.5">
+                title bar
+                <input v-model="activeRegion.arrange.title_bar" :class="[mini, 'flex-1 font-mono']" placeholder="none" @change="runPreview" />
+              </label>
+            </template>
+          </div>
+          <p v-if="ownLayout" class="border-b border-amber-100 bg-amber-50 px-3 py-1.5 text-xs text-amber-800">
+            This template still has its own <code>layout</code> or <code>title_bar</code>. With an arrangement, list only the content —
+            the region adds the layout and title bar.
+          </p>
           <div class="flex items-center gap-3 border-b border-zinc-100 px-3 py-1.5 text-xs text-zinc-500">
             <label class="flex items-center gap-1.5">
               <input v-model="activeRegion.transparent" type="checkbox" />

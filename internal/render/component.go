@@ -70,6 +70,7 @@ func (r *Renderer) RenderComponent(ctx context.Context, req ComponentRequest) (R
 		regions[i] = store.Region{Key: s.Key, W: int(s.W * float64(model.Width)), H: int(s.H * float64(model.Height))}
 	}
 	regions[0].Template = call.String()
+	regions[0].Arrange = Arrange{Mode: "stack", Align: "center"}.JSON() // components are content; the region lays them out
 
 	sc := store.Screen{Name: "Component preview", ModelID: model.ID, Layout: layoutKey, FrameworkVersion: assets.FrameworkVersion}
 	data := func(key string) (map[string]any, map[string]bool) {

@@ -36,6 +36,8 @@ type Region struct {
 	Template    string `db:"template"`
 	Class       string `db:"class"`
 	Transparent bool   `db:"transparent"`
+	Arrange     string `db:"arrange"` // JSON, see render.Arrange
+	Blocks      string `db:"blocks"`  // JSON, see render.Block; "" = edited as HTML
 }
 
 type Render struct {
@@ -100,8 +102,8 @@ func (s *Store) CreateScreen(ctx context.Context, sc *Screen, regions []Region) 
 	for i := range regions {
 		regions[i].ScreenID = sc.ID
 		res, err := tx.NamedExecContext(ctx, `
-			INSERT INTO regions (screen_id, key, x, y, w, h, z, template, class, transparent)
-			VALUES (:screen_id, :key, :x, :y, :w, :h, :z, :template, :class, :transparent)`, &regions[i])
+			INSERT INTO regions (screen_id, key, x, y, w, h, z, template, class, transparent, arrange, blocks)
+			VALUES (:screen_id, :key, :x, :y, :w, :h, :z, :template, :class, :transparent, :arrange, :blocks)`, &regions[i])
 		if err != nil {
 			return fmt.Errorf("insert region: %w", err)
 		}
@@ -142,14 +144,15 @@ func (s *Store) UpdateScreen(ctx context.Context, sc *Screen, regions []Region) 
 		if r.ID != 0 {
 			if _, err := tx.NamedExecContext(ctx, `
 				UPDATE regions SET key = :key, x = :x, y = :y, w = :w, h = :h, z = :z,
-					template = :template, class = :class, transparent = :transparent
+					template = :template, class = :class, transparent = :transparent,
+					arrange = :arrange, blocks = :blocks
 				WHERE id = :id AND screen_id = :screen_id`, r); err != nil {
 				return fmt.Errorf("update region: %w", err)
 			}
 		} else {
 			res, err := tx.NamedExecContext(ctx, `
-				INSERT INTO regions (screen_id, key, x, y, w, h, z, template, class, transparent)
-				VALUES (:screen_id, :key, :x, :y, :w, :h, :z, :template, :class, :transparent)`, r)
+				INSERT INTO regions (screen_id, key, x, y, w, h, z, template, class, transparent, arrange, blocks)
+				VALUES (:screen_id, :key, :x, :y, :w, :h, :z, :template, :class, :transparent, :arrange, :blocks)`, r)
 			if err != nil {
 				return fmt.Errorf("insert region: %w", err)
 			}

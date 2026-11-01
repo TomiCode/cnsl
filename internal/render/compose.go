@@ -26,6 +26,8 @@ var pageTemplate = template.Must(template.New("page").Parse(`<!doctype html>
     background: transparent !important; background-image: none !important;
   }
   .cnsl-icon { flex-shrink: 0; vertical-align: middle; }
+  .cnsl-flow { width: 100%; height: 100%; column-fill: auto; column-gap: var(--cnsl-gap); }
+  .cnsl-flow > * { break-inside: avoid; margin-bottom: var(--cnsl-gap); }
   .cnsl-error { margin: 8px; padding: 8px; border: 2px solid #000; font: 14px/1.3 monospace; white-space: pre-wrap; background: #fff; }
 {{- if .Background }}
   .cnsl-bg { position: fixed; left: 0; top: 0; z-index: 0; image-rendering: pixelated; }
@@ -49,6 +51,26 @@ var pageTemplate = template.Must(template.New("page").Parse(`<!doctype html>
 </div>
 {{- end }}
 </div>
+<script>
+// Region arrangements that depend on the content (runs before the framework runtime measures).
+(function () {
+  // Automatic grids: columns from the item count and the space's shape (6 items, landscape → 3×2).
+  document.querySelectorAll('[data-cnsl-grid="auto"]').forEach(function (g) {
+    var n = g.children.length, box = (g.parentElement || g).getBoundingClientRect();
+    if (!n || !box.height) return;
+    var cols = Math.max(1, Math.min(n, Math.round(Math.sqrt(n * box.width / box.height))));
+    if (n <= 3 && box.width >= box.height) cols = n;
+    g.style.gridTemplateColumns = 'repeat(' + cols + ', minmax(0, 1fr))';
+  });
+  // Flowing columns: as many as the content needs to fit the height.
+  document.querySelectorAll('[data-cnsl-flow]').forEach(function (f) {
+    var h = f.clientHeight, total = 0;
+    if (!h) return;
+    Array.prototype.forEach.call(f.children, function (c) { total += c.getBoundingClientRect().height + parseFloat(getComputedStyle(c).marginBottom || 0); });
+    f.style.columnCount = String(Math.max(1, Math.min(6, Math.ceil(total / h))));
+  });
+})();
+</script>
 </body>
 </html>`))
 
@@ -97,6 +119,24 @@ func compose(p page, regions []store.Region, ctx tmpl.Context) (string, []*tmpl.
 			}
 			errs = append(errs, te)
 			body = template.HTML(`<div class="cnsl-error">` + template.HTMLEscapeString(te.Error()) + `</div>`)
+		}
+
+		// The region's arrangement wraps the content in the framework layout (and title bar).
+		if arr, err := ParseArrange(r.Arrange); err == nil && arr.Mode != "" && !legacyView(r.Template) {
+			free := layout.Key == LayoutFree
+			body = template.HTML(arr.wrap(body, free))
+			if arr.TitleBar != "" && !free {
+				title, err := tmpl.Render(r.Key, arr.TitleBar, rctx, p.lib)
+				if err != nil {
+					te, ok := err.(*tmpl.Error)
+					if !ok {
+						te = &tmpl.Error{Region: r.Key, Message: err.Error()}
+					}
+					te.Message, te.Line, te.Column = "title bar: "+te.Message, 0, 0
+					errs = append(errs, te)
+				}
+				body += template.HTML(`<div class="title_bar"><span class="title">`) + title + template.HTML(`</span></div>`)
+			}
 		}
 
 		classes := strings.TrimSpace(r.Class)

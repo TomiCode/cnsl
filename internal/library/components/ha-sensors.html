@@ -1,6 +1,5 @@
 {{- with .entities }}
-<div class="layout layout--col layout--top">
-<table class="table">
+<table class="table w--full">
   <tbody>
   {{- range . }}
     <tr>
@@ -10,7 +9,6 @@
   {{- end }}
   </tbody>
 </table>
-</div>
 {{- else }}
 <span class="label">{{ t "no_data" }}</span>
 {{- end }}

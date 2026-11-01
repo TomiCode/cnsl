@@ -51,7 +51,7 @@ func TestRenderScreen(t *testing.T) {
 		t.Fatal(err)
 	}
 	sc := store.Screen{Name: "Clock", ModelID: model.ID, FrameworkVersion: assets.FrameworkVersion, RenderInterval: 900}
-	regions := []store.Region{{Key: "main", W: model.Width, H: model.Height, Template: DefaultTemplate}}
+	regions := []store.Region{{Key: "main", W: model.Width, H: model.Height, Template: DefaultTemplate, Arrange: DefaultArrange.JSON()}}
 	if err := st.CreateScreen(ctx, &sc, regions); err != nil {
 		t.Fatal(err)
 	}

@@ -50,24 +50,14 @@ func LayoutByKey(key string) (Layout, bool) {
 	return Layout{}, false
 }
 
-// DefaultTemplate is what a new full-screen region starts with. Region templates are the
-// content of a framework view; the view element itself comes from the layout.
-const DefaultTemplate = `<div class="layout layout--col layout--center gap--large">
-  <span class="value value--xxxlarge value--tnums">{{ date "15:04" .Now }}</span>
-  <span class="label label--large">{{ date "Monday, 2 January" .Now }}</span>
-</div>
-<div class="title_bar">
-  <span class="title">{{ .Screen.Name }}</span>
-</div>
+// DefaultTemplate is what a new full-screen region starts with. New regions use DefaultArrange,
+// so their templates only list content: the region supplies the layout and title bar.
+const DefaultTemplate = `<span class="value value--xxxlarge value--tnums">{{ date "15:04" .Now }}</span>
+<span class="label label--large">{{ date "Monday, 2 January" .Now }}</span>
 `
 
 // slotTemplate is the starter content for a new region of a split layout.
-const slotTemplate = `<div class="layout layout--col layout--center">
-  <span class="value value--large">{{ .Region.Key }}</span>
-</div>
-<div class="title_bar">
-  <span class="title">{{ .Screen.Name }}</span>
-</div>
+const slotTemplate = `<span class="value value--large">{{ .Region.Key }}</span>
 `
 
 // FreeTemplate is the starter content for a free region (no framework view around it).
@@ -112,7 +102,7 @@ func ApplyLayout(layout Layout, model store.DeviceModel, existing []store.Region
 	for _, s := range layout.Slots {
 		r, ok := byKey[s.Key]
 		if !ok {
-			r = store.Region{Key: s.Key, Template: slotTemplate}
+			r = store.Region{Key: s.Key, Template: slotTemplate, Arrange: DefaultArrange.JSON()}
 			if s.View == "full" {
 				r.Template = DefaultTemplate
 			}

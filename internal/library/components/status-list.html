@@ -1,5 +1,5 @@
 {{- with .status }}
-<div class="layout layout--col layout--top layout--left gap--small">
+<div class="flex flex--col gap--small">
   <span class="title title--small">{{ t "n_of_m_up" .up .total }}</span>
   {{- range .checks }}
   <div class="item">

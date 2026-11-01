@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: cnsl dashboard API
-  version: 0.9.0
+  version: 0.10.0
   description: |
     API used by the cnsl web dashboard. Device (firmware) endpoints are not part of this spec;
     they are served on the separate device listener (and mirrored under /device on the
@@ -567,6 +567,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/Preview"
         "404":
+          $ref: "#/components/responses/Problem"
+        "422":
           $ref: "#/components/responses/Problem"
         "503":
           $ref: "#/components/responses/Problem"
@@ -1477,9 +1479,34 @@ components:
             one per level. Quantization and dithering target these real levels; null = evenly
             spaced.
 
+    Arrange:
+      type: object
+      description: |
+        How a region lays out its content. The region supplies the framework layout (and title bar);
+        the template only lists the pieces. mode "" = the template brings its own layout.
+      required: [mode]
+      properties:
+        mode:
+          type: string
+          enum: ["", stack, row, grid, columns]
+        cols:
+          type: integer
+          minimum: 0
+          maximum: 6
+          description: Grid columns; 0 = as many as fit.
+        align:
+          type: string
+          enum: ["", top, center, bottom]
+        gap:
+          type: string
+          enum: ["", none, small, medium, large, xlarge]
+        title_bar:
+          type: string
+          description: Template for the title bar below the layout; empty = none.
+
     Region:
       type: object
-      required: [id, key, x, y, w, h, z, transparent, template]
+      required: [id, key, x, y, w, h, z, transparent, template, arrange]
       properties:
         id: { type: integer, format: int64 }
         key: { type: string, example: main }
@@ -1492,6 +1519,8 @@ components:
           type: boolean
           description: Let the screen background show through this region.
         template: { type: string }
+        arrange:
+          $ref: "#/components/schemas/Arrange"
 
     Render:
       type: object
@@ -1633,6 +1662,8 @@ components:
               key: { type: string, minLength: 1, maxLength: 40, pattern: "^[a-z0-9_]+$" }
               template: { type: string, maxLength: 200000 }
               transparent: { type: boolean }
+              arrange:
+                $ref: "#/components/schemas/Arrange"
               x: { type: integer }
               y: { type: integer }
               w: { type: integer }
@@ -1649,6 +1680,11 @@ components:
           type: object
           description: Unsaved region templates by region key.
           additionalProperties: { type: string }
+        arrange:
+          type: object
+          description: Unsaved region arrangements by region key.
+          additionalProperties:
+            $ref: "#/components/schemas/Arrange"
         head: { type: string }
 
     TemplateError:

@@ -1,5 +1,5 @@
 {{- with .weather }}
-<div class="layout layout--col layout--center gap--small">
+<div class="flex flex--col flex--center-x gap--small">
   <div class="flex flex--row flex--center-y gap--medium">
     {{- if $.icon_size }}{{ with .current.icon }}{{ icon . $.icon_size }}{{ end }}{{ end }}
     <span class="value value--xxlarge value--tnums">{{ num 0 .current.temperature }}{{ .units.temperature }}</span>

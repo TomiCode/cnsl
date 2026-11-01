@@ -65,6 +65,7 @@ func NewRenderer(o Options) *Renderer {
 type Request struct {
 	ScreenID  int64
 	Overrides map[string]string
+	Arrange   map[string]Arrange // unsaved arrangements by region key
 	Head      *string
 	Trigger   string
 	Sample    bool // use connector sample data instead of real data
@@ -103,6 +104,9 @@ func (r *Renderer) Render(ctx context.Context, req Request) (Result, error) {
 	for i := range regions {
 		if src, ok := req.Overrides[regions[i].Key]; ok {
 			regions[i].Template = src
+		}
+		if a, ok := req.Arrange[regions[i].Key]; ok {
+			regions[i].Arrange = a.JSON()
 		}
 	}
 	if req.Head != nil {
