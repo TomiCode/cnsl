@@ -67,9 +67,12 @@ func (s *Server) UploadFirmware(ctx context.Context, req gen.UploadFirmwareReque
 		switch part.FormName() {
 		case "file":
 			filename = path.Base(filepath.ToSlash(part.FileName()))
-			data, err = io.ReadAll(io.LimitReader(part, ota.MaxSize+1))
+			data, err = io.ReadAll(io.LimitReader(part, ota.MaxUpload+1))
 			if err != nil {
 				return invalid("read upload: %v", err), nil
+			}
+			if len(data) > ota.MaxUpload {
+				return invalid("%s is larger than %d MiB", filename, ota.MaxUpload>>20), nil
 			}
 		case "version":
 			v, _ := io.ReadAll(io.LimitReader(part, 100))
@@ -82,6 +85,17 @@ func (s *Server) UploadFirmware(ctx context.Context, req gen.UploadFirmwareReque
 	}
 	if data == nil {
 		return invalid("missing file"), nil
+	}
+	// Full-flash images (as downloaded for web flashers) carry the app in a partition; only that
+	// part is stored and sent to devices.
+	app, full, err := ota.App(data)
+	if err != nil {
+		return invalid("%s: %v", filename, err), nil
+	}
+	if full {
+		data = app
+		note := "App taken from a full-flash image."
+		notes = strings.TrimSpace(note + " " + notes)
 	}
 	info, err := ota.Parse(data)
 	if err != nil {

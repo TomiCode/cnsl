@@ -135,8 +135,7 @@ const input = 'rounded-md border border-zinc-300 bg-white px-2.5 py-1.5 text-sm 
       <TriangleAlert class="mt-0.5 size-4 shrink-0" />
       <span>
         TRMNL firmware installs any app image it is given — there is no signature check, and the TRMNL X can't roll back. cnsl only accepts
-        complete app images (<code>firmware.bin</code>, not the merged/factory file) for the model's chip, but a broken build still means
-        re-flashing over USB.
+        complete app images for the model's chip and checks their checksum, but a broken build still means re-flashing over USB.
       </span>
     </p>
     <p v-if="error" class="rounded-md bg-red-50 px-4 py-2 text-sm text-red-700">{{ error }}</p>
@@ -147,7 +146,7 @@ const input = 'rounded-md border border-zinc-300 bg-white px-2.5 py-1.5 text-sm 
       <div class="mb-3 text-sm font-medium">Upload</div>
       <div class="flex flex-wrap items-end gap-3">
         <label class="block text-sm">
-          <span class="mb-1 block text-zinc-600">App image (.bin)</span>
+          <span class="mb-1 block text-zinc-600">Firmware (.bin)</span>
           <input ref="fileInput" type="file" accept=".bin,application/octet-stream" class="text-sm" @change="pick" />
         </label>
         <label class="block text-sm">
@@ -168,7 +167,8 @@ const input = 'rounded-md border border-zinc-300 bg-white px-2.5 py-1.5 text-sm 
         </button>
       </div>
       <p class="mt-2 text-xs text-zinc-400">
-        The version must match what the firmware reports in its <code>FW-Version</code> header (e.g. <code>FW_VERSION_STRING</code> in
+        Either an app image (<code>firmware.bin</code> from a build) or a full-flash image as downloaded for web flashers — cnsl takes the
+        app out of it and keeps only that. The version must match what the firmware reports in its <code>FW-Version</code> header (e.g. <code>FW_VERSION_STRING</code> in
         trmnl-firmware's <code>config.h</code>), otherwise cnsl can't tell the update worked.
       </p>
     </form>

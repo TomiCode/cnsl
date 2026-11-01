@@ -18,8 +18,11 @@ import (
 	"strings"
 )
 
-// MaxSize bounds uploads; app partitions of the supported boards are 3 MiB.
+// MaxSize bounds app images; app partitions of the supported boards are 3 MiB.
 const MaxSize = 8 << 20
+
+// MaxUpload bounds uploaded files, which may be full-flash images (16 MiB on the TRMNL X).
+const MaxUpload = 32 << 20
 
 // Info is what an app image says about itself.
 type Info struct {
@@ -74,7 +77,7 @@ func Parse(data []byte) (Info, error) {
 
 	desc := data[headerLen+segHeaderLen:]
 	if binary.LittleEndian.Uint32(desc[0:4]) != appDescMagic {
-		return Info{}, errors.New("no app descriptor: this looks like a merged or bootloader image, not an app image (use firmware.bin, not the factory/merged .bin)")
+		return Info{}, errors.New("no app descriptor: neither an app image nor a full-flash image with an app partition")
 	}
 
 	info := Info{
@@ -125,6 +128,61 @@ func imageEnd(data []byte) (int, error) {
 		off += 16 - rem
 	}
 	return off, nil
+}
+
+// Partition table location and entry layout (esp_partition_info_t).
+const (
+	partitionTableOffset = 0x8000
+	partitionMagic       = 0x50AA // bytes AA 50
+	partitionEntryLen    = 32
+	partitionTypeApp     = 0
+)
+
+// App returns the app image in data: data itself when it is an app image, or the image in the
+// first app partition of a full-flash image (bootloader, partition table, apps, filesystem — what
+// web flashers write). full reports the second case.
+func App(data []byte) (app []byte, full bool, err error) {
+	if len(data) < headerLen+segHeaderLen+256 || data[0] != imageMagic {
+		return data, false, nil // Parse explains what is wrong
+	}
+	if binary.LittleEndian.Uint32(data[headerLen+segHeaderLen:]) == appDescMagic {
+		return data, false, nil
+	}
+	// Starts with an image but not an app: a bootloader, so look for the partition table.
+	if len(data) < partitionTableOffset+partitionEntryLen {
+		return data, false, nil
+	}
+	for off := partitionTableOffset; off+partitionEntryLen <= len(data); off += partitionEntryLen {
+		e := data[off : off+partitionEntryLen]
+		if binary.LittleEndian.Uint16(e[0:2]) != partitionMagic {
+			break // end of the table (FF FF) or its MD5 entry (EB EB)
+		}
+		if e[2] != partitionTypeApp {
+			continue
+		}
+		start := int(binary.LittleEndian.Uint32(e[4:8]))
+		size := int(binary.LittleEndian.Uint32(e[8:12]))
+		if start <= 0 || start >= len(data) {
+			continue
+		}
+		part := data[start:min(start+size, len(data))]
+		if len(part) < headerLen+segHeaderLen+256 || part[0] != imageMagic ||
+			binary.LittleEndian.Uint32(part[headerLen+segHeaderLen:]) != appDescMagic {
+			continue // empty slot (e.g. ota_1 in a fresh image)
+		}
+		end, err := imageEnd(part)
+		if err != nil {
+			return nil, true, fmt.Errorf("app partition at %#x: %w", start, err)
+		}
+		if part[23] == 1 { // appended SHA-256
+			end += 32
+		}
+		if end > len(part) {
+			return nil, true, fmt.Errorf("app partition at %#x is truncated", start)
+		}
+		return part[:end], true, nil
+	}
+	return nil, true, errors.New("a full-flash image without an app partition with firmware in it")
 }
 
 func cstr(b []byte) string {
