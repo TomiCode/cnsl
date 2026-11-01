@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: cnsl dashboard API
-  version: 0.10.0
+  version: 0.11.0
   description: |
     API used by the cnsl web dashboard. Device (firmware) endpoints are not part of this spec;
     they are served on the separate device listener (and mirrored under /device on the
@@ -1504,6 +1504,26 @@ components:
           type: string
           description: Template for the title bar below the layout; empty = none.
 
+    Block:
+      type: object
+      description: |
+        A piece of a region edited without HTML: a component call (component + args), or an
+        HTML/template snippet (html). The region's arrangement places the blocks.
+      properties:
+        component: { type: string }
+        args:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/BlockArg"
+        html: { type: string, maxLength: 100000 }
+
+    BlockArg:
+      type: object
+      description: An input value, either a data path (.Data.alias.field) or a literal.
+      properties:
+        path: { type: string }
+        value: {}
+
     Region:
       type: object
       required: [id, key, x, y, w, h, z, transparent, template, arrange]
@@ -1521,6 +1541,12 @@ components:
         template: { type: string }
         arrange:
           $ref: "#/components/schemas/Arrange"
+        blocks:
+          type: array
+          nullable: true
+          description: The region's blocks; null when it is edited as HTML.
+          items:
+            $ref: "#/components/schemas/Block"
 
     Render:
       type: object
@@ -1664,6 +1690,15 @@ components:
               transparent: { type: boolean }
               arrange:
                 $ref: "#/components/schemas/Arrange"
+              blocks:
+                type: array
+                nullable: true
+                maxItems: 100
+                description: |
+                  Blocks for the region; the template is generated from them. Omitted or null:
+                  the region is edited as HTML and template is used as given.
+                items:
+                  $ref: "#/components/schemas/Block"
               x: { type: integer }
               y: { type: integer }
               w: { type: integer }
@@ -1685,6 +1720,13 @@ components:
           description: Unsaved region arrangements by region key.
           additionalProperties:
             $ref: "#/components/schemas/Arrange"
+        blocks:
+          type: object
+          description: Unsaved region blocks by region key (replace those regions' templates).
+          additionalProperties:
+            type: array
+            items:
+              $ref: "#/components/schemas/Block"
         head: { type: string }
 
     TemplateError:

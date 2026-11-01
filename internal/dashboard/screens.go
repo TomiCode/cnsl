@@ -13,6 +13,7 @@ import (
 	"github.com/TomiCode/cnsl/internal/dashboard/gen"
 	"github.com/TomiCode/cnsl/internal/events"
 	"github.com/TomiCode/cnsl/internal/i18n"
+	"github.com/TomiCode/cnsl/internal/library"
 	"github.com/TomiCode/cnsl/internal/render"
 	"github.com/TomiCode/cnsl/internal/store"
 	"github.com/TomiCode/cnsl/internal/tmpl"
@@ -75,7 +76,7 @@ func (s *Server) screenResponse(ctx context.Context, sc store.Screen) (gen.Scree
 	}
 	for _, r := range regions {
 		out.Regions = append(out.Regions, gen.Region{Id: r.ID, Key: r.Key, X: r.X, Y: r.Y, W: r.W, H: r.H, Z: r.Z,
-			Transparent: r.Transparent, Template: r.Template, Arrange: toArrange(r.Arrange)})
+			Transparent: r.Transparent, Template: r.Template, Arrange: toArrange(r.Arrange), Blocks: toBlocks(r.Blocks)})
 	}
 	return out, nil
 }
@@ -261,7 +262,7 @@ func (s *Server) mergeRegions(ctx context.Context, sc store.Screen, model store.
 				reg = existing[byID[*r.Id]]
 				reg.Key = r.Key
 			}
-			if err := applyContent(&reg, r); err != nil {
+			if err := s.applyContent(ctx, &reg, r); err != nil {
 				return nil, err
 			}
 			if r.X != nil && r.Y != nil && r.W != nil && r.H != nil {
@@ -294,7 +295,7 @@ func (s *Server) mergeRegions(ctx context.Context, sc store.Screen, model store.
 		if idx < 0 {
 			continue // new regions come from the layout's slots
 		}
-		if err := applyContent(&merged[idx], r); err != nil {
+		if err := s.applyContent(ctx, &merged[idx], r); err != nil {
 			return nil, err
 		}
 	}
@@ -304,7 +305,7 @@ func (s *Server) mergeRegions(ctx context.Context, sc store.Screen, model store.
 	for _, r := range in {
 		for i := range out {
 			if out[i].Key == r.Key {
-				if err := applyContent(&out[i], r); err != nil {
+				if err := s.applyContent(ctx, &out[i], r); err != nil {
 					return nil, err
 				}
 			}
@@ -316,6 +317,7 @@ func (s *Server) mergeRegions(ctx context.Context, sc store.Screen, model store.
 // regionInput is one entry of ScreenUpdate.regions (an anonymous struct in the generated code).
 type regionInput = struct {
 	Arrange     *gen.Arrange `json:"arrange,omitempty"`
+	Blocks      *[]gen.Block `json:"blocks,omitempty"`
 	H           *int         `json:"h,omitempty"`
 	Id          *int64       `json:"id,omitempty"`
 	Key         string       `json:"key"`
@@ -327,9 +329,18 @@ type regionInput = struct {
 	Z           *int         `json:"z,omitempty"`
 }
 
-// applyContent copies a submitted region's content and settings onto a region.
-func applyContent(reg *store.Region, r regionInput) error {
-	reg.Template = r.Template
+// applyContent copies a submitted region's content and settings onto a region. Regions with blocks
+// get their template generated from them.
+func (s *Server) applyContent(ctx context.Context, reg *store.Region, r regionInput) error {
+	reg.Template, reg.Blocks = r.Template, ""
+	if r.Blocks != nil {
+		blocks := fromBlocks(*r.Blocks)
+		src, err := s.blocksTemplate(ctx, blocks)
+		if err != nil {
+			return fmt.Errorf("region %q: %w", r.Key, err)
+		}
+		reg.Template, reg.Blocks = src, render.BlocksJSON(blocks)
+	}
 	if r.Transparent != nil {
 		reg.Transparent = *r.Transparent
 	}
@@ -341,6 +352,56 @@ func applyContent(reg *store.Region, r regionInput) error {
 		reg.Arrange = a.JSON()
 	}
 	return nil
+}
+
+func (s *Server) blocksTemplate(ctx context.Context, blocks []render.Block) (string, error) {
+	lib, err := library.Load(ctx, s.store)
+	if err != nil {
+		return "", err
+	}
+	return render.BlocksTemplate(blocks, lib)
+}
+
+func fromBlocks(in []gen.Block) []render.Block {
+	out := make([]render.Block, len(in))
+	for i, b := range in {
+		out[i] = render.Block{Component: deref(b.Component), HTML: deref(b.Html)}
+		if b.Args != nil && len(*b.Args) > 0 {
+			out[i].Args = map[string]render.BlockArg{}
+			for name, a := range *b.Args {
+				out[i].Args[name] = render.BlockArg{Path: deref(a.Path), Value: a.Value}
+			}
+		}
+	}
+	return out
+}
+
+func toBlocks(s string) *[]gen.Block {
+	blocks, err := render.ParseBlocks(s)
+	if err != nil || blocks == nil {
+		return nil
+	}
+	out := make([]gen.Block, len(blocks))
+	for i, b := range blocks {
+		if b.Component != "" {
+			out[i].Component = &blocks[i].Component
+		} else {
+			out[i].Html = &blocks[i].HTML
+		}
+		if len(b.Args) > 0 {
+			args := map[string]gen.BlockArg{}
+			for name, a := range b.Args {
+				ga := gen.BlockArg{Value: a.Value}
+				if a.Path != "" {
+					path := a.Path
+					ga.Path = &path
+				}
+				args[name] = ga
+			}
+			out[i].Args = &args
+		}
+	}
+	return &out
 }
 
 func fromArrange(a gen.Arrange) render.Arrange {
@@ -416,6 +477,18 @@ func (s *Server) PreviewScreen(ctx context.Context, req gen.PreviewScreenRequest
 		rreq.Sample = req.Body.Sample != nil && *req.Body.Sample
 		if req.Body.Templates != nil {
 			rreq.Overrides = *req.Body.Templates
+		}
+		if req.Body.Blocks != nil {
+			if rreq.Overrides == nil {
+				rreq.Overrides = map[string]string{}
+			}
+			for key, blocks := range *req.Body.Blocks {
+				src, err := s.blocksTemplate(ctx, fromBlocks(blocks))
+				if err != nil {
+					return gen.PreviewScreen422ApplicationProblemPlusJSONResponse(invalidProblem(fmt.Errorf("region %q: %w", key, err))), nil
+				}
+				rreq.Overrides[key] = src
+			}
 		}
 		if req.Body.Arrange != nil {
 			rreq.Arrange = map[string]render.Arrange{}

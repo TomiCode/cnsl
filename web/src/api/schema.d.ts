@@ -985,6 +985,22 @@ export interface components {
             /** @description Template for the title bar below the layout; empty = none. */
             title_bar?: string;
         };
+        /**
+         * @description A piece of a region edited without HTML: a component call (component + args), or an
+         *     HTML/template snippet (html). The region's arrangement places the blocks.
+         */
+        Block: {
+            component?: string;
+            args?: {
+                [key: string]: components["schemas"]["BlockArg"];
+            };
+            html?: string;
+        };
+        /** @description An input value, either a data path (.Data.alias.field) or a literal. */
+        BlockArg: {
+            path?: string;
+            value?: unknown;
+        };
         Region: {
             /** Format: int64 */
             id: number;
@@ -999,6 +1015,8 @@ export interface components {
             transparent: boolean;
             template: string;
             arrange: components["schemas"]["Arrange"];
+            /** @description The region's blocks; null when it is edited as HTML. */
+            blocks?: components["schemas"]["Block"][] | null;
         };
         Render: {
             /** Format: int64 */
@@ -1100,6 +1118,11 @@ export interface components {
                 template: string;
                 transparent?: boolean;
                 arrange?: components["schemas"]["Arrange"];
+                /**
+                 * @description Blocks for the region; the template is generated from them. Omitted or null:
+                 *     the region is edited as HTML and template is used as given.
+                 */
+                blocks?: components["schemas"]["Block"][] | null;
                 x?: number;
                 y?: number;
                 w?: number;
@@ -1117,6 +1140,10 @@ export interface components {
             /** @description Unsaved region arrangements by region key. */
             arrange?: {
                 [key: string]: components["schemas"]["Arrange"];
+            };
+            /** @description Unsaved region blocks by region key (replace those regions' templates). */
+            blocks?: {
+                [key: string]: components["schemas"]["Block"][];
             };
             head?: string;
         };

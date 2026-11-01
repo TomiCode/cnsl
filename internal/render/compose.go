@@ -26,6 +26,8 @@ var pageTemplate = template.Must(template.New("page").Parse(`<!doctype html>
     background: transparent !important; background-image: none !important;
   }
   .cnsl-icon { flex-shrink: 0; vertical-align: middle; }
+  .cnsl-block { display: contents; }
+  [data-cnsl-arrange="grid"] { align-items: center; }
   .cnsl-flow { width: 100%; height: 100%; column-fill: auto; column-gap: var(--cnsl-gap); }
   .cnsl-flow > * { break-inside: avoid; margin-bottom: var(--cnsl-gap); }
   .cnsl-error { margin: 8px; padding: 8px; border: 2px solid #000; font: 14px/1.3 monospace; white-space: pre-wrap; background: #fff; }

@@ -81,9 +81,9 @@ func (a Arrange) gap() string {
 // number of items and the region's shape.
 func (a Arrange) cols() string {
 	if a.Cols > 0 {
-		return fmt.Sprintf(` class="grid grid--cols-%d %s`, a.Cols, a.gap())
+		return fmt.Sprintf(` data-cnsl-arrange="grid" class="grid grid--cols-%d %s`, a.Cols, a.gap())
 	}
-	return fmt.Sprintf(` data-cnsl-grid="auto" class="grid %s`, a.gap())
+	return fmt.Sprintf(` data-cnsl-arrange="grid" data-cnsl-grid="auto" class="grid %s`, a.gap())
 }
 
 // gapVar is the framework spacing for the flow layout, which can't use the gap utilities.

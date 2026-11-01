@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, Blocks, CircleAlert, CircleCheck, Eye, Loader2, Play, Plus, Save, Trash2, X } from 'lucide-vue-next'
 import CodeEditor from '@/components/CodeEditor.vue'
+import BlockEditor from '@/components/BlockEditor.vue'
+import { blocksToHTML, componentBlock, type Block } from '@/lib/blocks'
 import BackgroundPanel from '@/components/BackgroundPanel.vue'
 import DataPanel from '@/components/DataPanel.vue'
 import { dataPaths } from '@/lib/datapaths'
@@ -28,6 +30,7 @@ interface DraftRegion {
   h: number
   z: number
   arrange: Arrange
+  blocks: Block[] | null // null = edited as HTML
 }
 type Arrange = Schemas['Arrange']
 
@@ -132,6 +135,7 @@ function fromScreen(s: Schemas['Screen']): Draft {
     regions: s.regions.map((r) => ({
       id: r.id, key: r.key, template: r.template, transparent: r.transparent, x: r.x, y: r.y, w: r.w, h: r.h, z: r.z,
       arrange: { ...r.arrange },
+      blocks: r.blocks ? JSON.parse(JSON.stringify(r.blocks)) : null,
     })),
   }
 }
@@ -209,7 +213,7 @@ function changeLayout(key: string) {
     let r = byKey.get(s.key)
     if (!r) {
       const reused = leftovers.shift()
-      r = reused ? { ...reused, key: s.key } : { key: s.key, template: slotTemplate, transparent: false, x: 0, y: 0, w: 0, h: 0, z: 0, arrange: defaultArrange() }
+      r = reused ? { ...reused, key: s.key } : { key: s.key, template: slotTemplate, transparent: false, x: 0, y: 0, w: 0, h: 0, z: 0, arrange: defaultArrange(), blocks: null }
     }
     return {
       ...r,
@@ -231,7 +235,7 @@ function addFreeRegion() {
   while (draft.regions.some((r) => r.key === `region_${n}`)) n++
   const w = Math.round(m.width / 3)
   const h = Math.round(m.height / 4)
-  draft.regions.push({ key: `region_${n}`, template: freeTemplate, transparent: true, x: Math.round(m.width / 20), y: Math.round(m.height / 20), w, h, z: draft.regions.length, arrange: freeArrange() })
+  draft.regions.push({ key: `region_${n}`, template: freeTemplate, transparent: true, x: Math.round(m.width / 20), y: Math.round(m.height / 20), w, h, z: draft.regions.length, arrange: freeArrange(), blocks: null })
   tab.value = 'regions'
 }
 
@@ -245,8 +249,9 @@ async function runPreview() {
   try {
     const templates = Object.fromEntries(draft.regions.map((r) => [r.key, r.template]))
     const arrange = Object.fromEntries(draft.regions.map((r) => [r.key, r.arrange]))
+    const blocks = Object.fromEntries(draft.regions.filter((r) => r.blocks).map((r) => [r.key, r.blocks!]))
     const res = unwrap(
-      await api.POST('/screens/{id}/preview', { params: { path: { id: id.value } }, body: { templates, arrange, head: draft.head, sample: sample.value } }),
+      await api.POST('/screens/{id}/preview', { params: { path: { id: id.value } }, body: { templates, arrange, blocks, head: draft.head, sample: sample.value } }),
     )
     preview.value = res
     errors.value = res.errors
@@ -327,29 +332,79 @@ async function insertComponent(c: Component) {
   const region = activeRegion.value
   if (!region) return
   try {
-    const [bindings] = await Promise.all([
-      api.GET('/screens/{id}/bindings', { params: { path: { id: id.value } } }).then(unwrap),
-      connectors.loaded ? Promise.resolve() : connectors.load(),
-    ])
-    const visible = bindings.filter((b) => b.enabled && (!b.region_key || b.region_key === region.key))
-    const args: Record<string, string> = {}
-    const missing: string[] = []
-    for (const i of c.inputs.filter((i) => i.kind === 'data')) {
-      const b = visible.find((b) => !i.connector || connectors.byId(b.connector_id)?.type === i.connector)
-      if (!b) {
-        missing.push(connectors.typeOf(i.connector)?.name ?? 'data')
-        continue
-      }
-      args[i.name] = `.Data.${b.alias}` + itemPath(i.sample, screenData.value[b.alias]?.data)
-    }
-    editor.value?.insert(callFor(c, args) + '\n')
-    message.value = missing.length
-      ? { ok: false, text: `No ${missing.join(', ')} binding for this region yet — add one in the Data tab and fix the .Data path` }
-      : null
+    const paths = await dataArgs(c, region.key)
+    if (region.blocks) region.blocks.push(componentBlock(c, paths))
+    else editor.value?.insert(callFor(c, paths) + '\n')
   } catch (e) {
     message.value = { ok: false, text: (e as Error).message }
   }
 }
+
+// dataArgs picks, for each data input of a component, a binding of the expected connector type
+// visible to the region, and reports the inputs it couldn't fill.
+async function dataArgs(c: Component, regionKey: string): Promise<Record<string, string>> {
+  const [bindings] = await Promise.all([
+    api.GET('/screens/{id}/bindings', { params: { path: { id: id.value } } }).then(unwrap),
+    connectors.loaded ? Promise.resolve() : connectors.load(),
+  ])
+  const visible = bindings.filter((b) => b.enabled && (!b.region_key || b.region_key === regionKey))
+  const args: Record<string, string> = {}
+  const missing: string[] = []
+  for (const i of c.inputs.filter((i) => i.kind === 'data')) {
+    const b = visible.find((b) => !i.connector || connectors.byId(b.connector_id)?.type === i.connector)
+    if (!b) {
+      missing.push(connectors.typeOf(i.connector)?.name ?? 'data')
+      continue
+    }
+    args[i.name] = `.Data.${b.alias}` + itemPath(i.sample, screenData.value[b.alias]?.data)
+  }
+  message.value = missing.length
+    ? { ok: false, text: `No ${missing.join(', ')} binding for this region yet — add one in the Data tab and fix the .Data path` }
+    : null
+  return args
+}
+
+// Blocks: add, switch modes, preview while editing.
+async function addBlock(c: Component | null) {
+  const region = activeRegion.value
+  if (!region?.blocks) return
+  if (!c) {
+    region.blocks.push({ html: '' })
+    return
+  }
+  try {
+    region.blocks.push(componentBlock(c, await dataArgs(c, region.key)))
+  } catch (e) {
+    message.value = { ok: false, text: (e as Error).message }
+  }
+}
+
+function useBlocks() {
+  const r = activeRegion.value
+  if (!r || r.blocks) return
+  // The current HTML becomes the first block, so nothing is lost.
+  r.blocks = r.template.trim() ? [{ html: r.template.trim() }] : []
+  if (!r.arrange.mode) Object.assign(r.arrange, isFree.value ? freeArrange() : defaultArrange())
+}
+
+function useHTML() {
+  const r = activeRegion.value
+  if (!r?.blocks) return
+  r.template = blocksToHTML(r.blocks, library.components)
+  r.blocks = null
+}
+
+const paths = computed(() => dataPaths(screenData.value).map((f) => f.label))
+const highlightBlock = ref<number | null>(null)
+let blockTimer: ReturnType<typeof setTimeout> | undefined
+watch(
+  () => JSON.stringify(draft.regions.map((r) => r.blocks)),
+  (_now, before) => {
+    if (!screen.value || before === undefined) return
+    clearTimeout(blockTimer)
+    blockTimer = setTimeout(() => void runPreview(), 700)
+  },
+)
 
 // An input whose sample looks like one entry of a keyed binding (a Home Assistant entity, say)
 // gets the binding's first entry: ".sensor_outdoor_temperature".
@@ -380,7 +435,8 @@ const tabs = computed(() => {
 // The region arranges its content, so a template with its own layout would nest layouts.
 const ownLayout = computed(() => {
   const r = activeRegion.value
-  return !!r?.arrange.mode && /class="[^"]*\b(layout|title_bar)\b/.test(r.template)
+  const html = r?.blocks ? r.blocks.map((b) => b.html ?? '').join('\n') : (r?.template ?? '')
+  return !!r?.arrange.mode && /class="[^"]*\b(layout|title_bar)\b/.test(html)
 })
 
 function arrangeChanged() {
@@ -471,6 +527,26 @@ const num = 'w-20 rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm f
         <!-- Region template -->
         <template v-if="activeRegion">
           <div class="flex flex-wrap items-center gap-2 border-b border-zinc-100 px-3 py-1.5 text-xs text-zinc-500">
+            <div class="flex overflow-hidden rounded border border-zinc-300">
+              <button
+                type="button"
+                class="px-2 py-0.5"
+                :class="activeRegion.blocks ? 'bg-zinc-900 text-white' : 'bg-white hover:bg-zinc-50'"
+                title="Edit with blocks: pick components and fill in forms"
+                @click="useBlocks"
+              >
+                Blocks
+              </button>
+              <button
+                type="button"
+                class="border-l border-zinc-300 px-2 py-0.5"
+                :class="activeRegion.blocks ? 'bg-white hover:bg-zinc-50' : 'bg-zinc-900 text-white'"
+                title="Edit the template as HTML"
+                @click="useHTML"
+              >
+                HTML
+              </button>
+            </div>
             <span>Arrange</span>
             <select v-model="activeRegion.arrange.mode" :class="mini" aria-label="Arrangement" @change="arrangeChanged">
               <option v-for="m in arrangeModes" :key="m.value" :value="m.value">{{ m.label }}</option>
@@ -529,7 +605,16 @@ const num = 'w-20 rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm f
             </div>
             <span>{{ activeRegion.w }}×{{ activeRegion.h }} px</span>
           </div>
-          <div class="min-h-0 flex-1">
+          <div v-if="activeRegion.blocks" class="min-h-0 flex-1 overflow-y-auto bg-zinc-50">
+            <BlockEditor
+              v-model="activeRegion.blocks"
+              :components="library.components"
+              :data-paths="paths"
+              :highlight="highlightBlock"
+              @add="addBlock"
+            />
+          </div>
+          <div v-else class="min-h-0 flex-1">
             <CodeEditor
               :key="`region-${activeRegion.key}`"
               ref="editor"
